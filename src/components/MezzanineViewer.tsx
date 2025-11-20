@@ -104,52 +104,51 @@ function MezzanineModel({ config }: { config: MezzanineConfig }) {
       {(() => {
         // Calculate positions for all pallet gates together
         const allGateWidths = palletGates.flatMap(gate => 
-          Array.from({ length: gate.quantity }, () => ({
-            width: parseFloat(gate.width || '2000mm') / 1000,
-            id: `${gate.id}-${Date.now()}-${Math.random()}`
-          }))
+          Array.from({ length: gate.quantity }, () => 
+            parseFloat(gate.width || '2000mm') / 1000
+          )
         );
         
-        // Calculate positions sequentially
+        if (allGateWidths.length === 0) return null;
+        
+        // Calculate positions sequentially, centered as a group
         let currentX = 0;
         let totalSpan = 0;
-        if (allGateWidths.length > 0) {
-          allGateWidths.forEach((gate, idx) => {
-            if (idx > 0) {
-              const prevWidth = allGateWidths[idx - 1].width;
-              const spacing = Math.max(Math.max(prevWidth, gate.width) + 1, 2);
-              totalSpan += spacing;
-            }
-            totalSpan += gate.width;
-          });
-          currentX = -totalSpan / 2;
-        }
         
-        let gateIndex = 0;
-        return palletGates.map((gate) => {
-          const gateWidth = parseFloat(gate.width || '2000mm') / 1000;
-          const gates = [];
-          for (let q = 0; q < gate.quantity; q++) {
-            if (gateIndex > 0) {
-              const prevWidth = allGateWidths[gateIndex - 1].width;
-              const spacing = Math.max(Math.max(prevWidth, gateWidth) + 1, 2);
-              currentX += spacing;
-            }
-            currentX += gateWidth / 2;
-            gates.push({ x: currentX, width: gateWidth });
-            currentX += gateWidth / 2;
-            gateIndex++;
+        // Calculate total span needed
+        allGateWidths.forEach((gateWidth, idx) => {
+          if (idx > 0) {
+            const prevWidth = allGateWidths[idx - 1];
+            const spacing = Math.max(Math.max(prevWidth, gateWidth) + 1, 2);
+            totalSpan += spacing;
           }
-          return (
-            <PalletGate
-              key={gate.id}
-              length={length}
-              width={width}
-              height={height}
-              positions={gates}
-            />
-          );
+          totalSpan += gateWidth;
         });
+        
+        // Position gates starting from the left edge of the group
+        currentX = -totalSpan / 2;
+        const positions: Array<{ x: number; width: number }> = [];
+        
+        allGateWidths.forEach((gateWidth, idx) => {
+          if (idx > 0) {
+            const prevWidth = allGateWidths[idx - 1];
+            const spacing = Math.max(Math.max(prevWidth, gateWidth) + 1, 2);
+            currentX += spacing;
+          }
+          currentX += gateWidth / 2;
+          positions.push({ x: currentX, width: gateWidth });
+          currentX += gateWidth / 2;
+        });
+        
+        return (
+          <PalletGate
+            key="all-pallet-gates"
+            length={length}
+            width={width}
+            height={height}
+            positions={positions}
+          />
+        );
       })()}
     </group>
   );
@@ -475,10 +474,17 @@ function PalletGate({
   const railingHeight = 1.1; // 1.1 meters high (matches railings)
 
   return (
-    <group position={[0, 0, -width / 2]}>
+    <>
       {positions.map((pos, qIdx) => {
+        // Position at the front edge, exactly like railings
+        const basePosition: [number, number, number] = [
+          pos.x,
+          height + railingHeight / 2,
+          -width / 2
+        ];
+        
         return (
-          <group key={qIdx} position={[pos.x, height + railingHeight / 2, 0]}>
+          <group key={qIdx} position={basePosition}>
             {/* Main railing bar (middle) */}
             <mesh>
               <boxGeometry args={[pos.width, 0.05, 0.05]} />
@@ -511,7 +517,7 @@ function PalletGate({
           </group>
         );
       })}
-    </group>
+    </>
   );
 }
 
