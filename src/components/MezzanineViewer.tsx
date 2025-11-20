@@ -61,15 +61,29 @@ function MezzanineModel({ config }: { config: MezzanineConfig }) {
 
       {/* Railings */}
       {railings.map((railing, idx) => {
-        const railingLength = (railing.length || 10) * railing.quantity;
+        const segmentLength = railing.length || 10; // Length of each segment in meters
+        // Calculate total stairs quantity from all stair accessories
+        const totalStairsQuantity = stairs.reduce((sum, stair) => sum + stair.quantity, 0);
+        // Calculate pallet gate ranges - each accessory positions its gates independently
+        // Collect all gate positions from all accessories
+        const palletGatesWidths: number[] = [];
+        palletGates.forEach(gate => {
+          const gateWidth = parseFloat(gate.width || '2000mm') / 1000;
+          for (let q = 0; q < gate.quantity; q++) {
+            palletGatesWidths.push(gateWidth);
+          }
+        });
         return (
           <Railings
             key={railing.id}
             length={length}
             width={width}
             height={height}
-            railingLength={railingLength}
+            quantity={railing.quantity}
+            segmentLength={segmentLength}
             index={idx}
+            stairsQuantity={totalStairsQuantity}
+            palletGatesWidths={palletGatesWidths}
           />
         );
       })}
@@ -87,16 +101,56 @@ function MezzanineModel({ config }: { config: MezzanineConfig }) {
       ))}
 
       {/* Pallet gates */}
-      {palletGates.map((gate, idx) => (
-        <PalletGate
-          key={gate.id}
-          length={length}
-          width={width}
-          height={height}
-          index={idx}
-          gateWidth={gate.width || '2000mm'}
-        />
-      ))}
+      {(() => {
+        // Calculate positions for all pallet gates together
+        const allGateWidths = palletGates.flatMap(gate => 
+          Array.from({ length: gate.quantity }, () => ({
+            width: parseFloat(gate.width || '2000mm') / 1000,
+            id: `${gate.id}-${Date.now()}-${Math.random()}`
+          }))
+        );
+        
+        // Calculate positions sequentially
+        let currentX = 0;
+        let totalSpan = 0;
+        if (allGateWidths.length > 0) {
+          allGateWidths.forEach((gate, idx) => {
+            if (idx > 0) {
+              const prevWidth = allGateWidths[idx - 1].width;
+              const spacing = Math.max(Math.max(prevWidth, gate.width) + 1, 2);
+              totalSpan += spacing;
+            }
+            totalSpan += gate.width;
+          });
+          currentX = -totalSpan / 2;
+        }
+        
+        let gateIndex = 0;
+        return palletGates.map((gate) => {
+          const gateWidth = parseFloat(gate.width || '2000mm') / 1000;
+          const gates = [];
+          for (let q = 0; q < gate.quantity; q++) {
+            if (gateIndex > 0) {
+              const prevWidth = allGateWidths[gateIndex - 1].width;
+              const spacing = Math.max(Math.max(prevWidth, gateWidth) + 1, 2);
+              currentX += spacing;
+            }
+            currentX += gateWidth / 2;
+            gates.push({ x: currentX, width: gateWidth });
+            currentX += gateWidth / 2;
+            gateIndex++;
+          }
+          return (
+            <PalletGate
+              key={gate.id}
+              length={length}
+              width={width}
+              height={height}
+              positions={gates}
+            />
+          );
+        });
+      })()}
     </group>
   );
 }
@@ -111,7 +165,7 @@ function SupportColumns({
   width: number;
   height: number;
 }) {
-  const columnPositions = [
+  const columnPositions: [number, number, number][] = [
     [-length / 2 + 0.5, height / 2, -width / 2 + 0.5],
     [length / 2 - 0.5, height / 2, -width / 2 + 0.5],
     [-length / 2 + 0.5, height / 2, width / 2 - 0.5],
@@ -135,78 +189,226 @@ function Railings({
   length,
   width,
   height,
-  railingLength,
-  index,
+  quantity,
+  segmentLength,
+  index: _index,
+  stairsQuantity,
+  palletGatesWidths,
 }: {
   length: number;
   width: number;
   height: number;
-  railingLength: number;
+  quantity: number;
+  segmentLength: number;
   index: number;
+  stairsQuantity: number;
+  palletGatesWidths: number[];
 }) {
   const railingHeight = 1.1; // 1.1 meters
-  const positions = [
-    // Front
-    [0, height + railingHeight / 2, -width / 2],
-    // Back
-    [0, height + railingHeight / 2, width / 2],
-    // Left
-    [-length / 2, height + railingHeight / 2, 0],
-    // Right
-    [length / 2, height + railingHeight / 2, 0],
-  ];
+  const stairWidth = 1.0; // 1 meter wide (matches Stairs component)
+
+  // Calculate X-axis ranges occupied by stairs
+  // Each stair is 1.0m wide, spaced 2m apart (center-to-center)
+  // For quantity N, calculate occupied X ranges
+  const getStairsXRanges = (quantity: number): Array<[number, number]> => {
+    if (quantity === 0) return [];
+    const ranges: Array<[number, number]> = [];
+    for (let qIdx = 0; qIdx < quantity; qIdx++) {
+      // Center stairs: for quantity=1: 0, quantity=2: -1,1, quantity=3: -2,0,2, etc.
+      const offsetX = (qIdx - (quantity - 1) / 2) * 2;
+      // Each stair occupies: X from (offsetX - 0.5) to (offsetX + 0.5)
+      ranges.push([offsetX - stairWidth / 2, offsetX + stairWidth / 2]);
+    }
+    return ranges;
+  };
+
+  // Calculate X-axis ranges occupied by pallet gates
+  // Since each PalletGate component positions its gates independently (centered),
+  // we need to account for all possible positions. For simplicity, we'll position
+  // all gates in sequence with proper spacing, centered as a group.
+  const getPalletGatesXRanges = (widths: number[]): Array<[number, number]> => {
+    if (widths.length === 0) return [];
+    const ranges: Array<[number, number]> = [];
+    
+    // Position all gates in sequence, centered as a group
+    let currentX = 0;
+    let totalSpan = 0;
+    
+    // First, calculate total span needed
+    widths.forEach((gateWidth, idx) => {
+      if (idx > 0) {
+        const prevWidth = widths[idx - 1];
+        const spacing = Math.max(Math.max(prevWidth, gateWidth) + 1, 2);
+        totalSpan += spacing;
+      }
+      totalSpan += gateWidth;
+    });
+    
+    // Now position gates starting from the left edge of the group
+    currentX = -totalSpan / 2;
+    
+    widths.forEach((gateWidth, idx) => {
+      if (idx > 0) {
+        const prevWidth = widths[idx - 1];
+        const spacing = Math.max(Math.max(prevWidth, gateWidth) + 1, 2);
+        currentX += spacing;
+      }
+      currentX += gateWidth / 2;
+      // Each gate occupies: X from (currentX - gateWidth/2) to (currentX + gateWidth/2)
+      ranges.push([currentX - gateWidth / 2, currentX + gateWidth / 2]);
+      currentX += gateWidth / 2;
+    });
+    
+    return ranges;
+  };
+
+  const stairsXRanges = getStairsXRanges(stairsQuantity);
+  const palletGatesXRanges = getPalletGatesXRanges(palletGatesWidths);
+
+  // Helper function to check if a railing segment overlaps with any stair
+  const overlapsWithStairs = (segmentCenterX: number, segmentLength: number): boolean => {
+    const segmentMinX = segmentCenterX - segmentLength / 2;
+    const segmentMaxX = segmentCenterX + segmentLength / 2;
+    return stairsXRanges.some(([stairMinX, stairMaxX]) => {
+      // Check if segments overlap
+      return segmentMinX < stairMaxX && segmentMaxX > stairMinX;
+    });
+  };
+
+  // Helper function to check if a railing segment overlaps with any pallet gate
+  const overlapsWithPalletGates = (segmentCenterX: number, segmentLength: number): boolean => {
+    const segmentMinX = segmentCenterX - segmentLength / 2;
+    const segmentMaxX = segmentCenterX + segmentLength / 2;
+    return palletGatesXRanges.some(([gateMinX, gateMaxX]) => {
+      // Check if segments overlap
+      return segmentMinX < gateMaxX && segmentMaxX > gateMinX;
+    });
+  };
+
+  // Calculate capacity for each side
+  const frontCapacity = Math.floor(length / segmentLength);
+  const backCapacity = Math.floor(length / segmentLength);
+  const leftCapacity = Math.floor(width / segmentLength);
+  const rightCapacity = Math.floor(width / segmentLength);
+
+  // Distribute quantity across sides: front → back → left → right
+  const segments: Array<{
+    side: 'front' | 'back' | 'left' | 'right';
+    sideIndex: number; // Index within the side (0, 1, 2, ...)
+  }> = [];
+
+  let remaining = quantity;
+
+  // Fill front side, skipping segments that overlap with stairs or pallet gates
+  let frontSideIndex = 0;
+  let frontCount = 0;
+  while (remaining > 0 && frontSideIndex < frontCapacity) {
+    // Calculate the center position of this potential segment
+    const segmentCenterOffset = (frontSideIndex + 0.5) * segmentLength - length / 2;
+    
+    // Check if this segment would overlap with stairs or pallet gates
+    if (!overlapsWithStairs(segmentCenterOffset, segmentLength) && 
+        !overlapsWithPalletGates(segmentCenterOffset, segmentLength)) {
+      segments.push({ side: 'front', sideIndex: frontSideIndex });
+      remaining--;
+      frontCount++;
+    }
+    frontSideIndex++;
+  }
+
+  // Fill back side
+  const backCount = Math.min(remaining, backCapacity);
+  for (let i = 0; i < backCount; i++) {
+    segments.push({ side: 'back', sideIndex: i });
+  }
+  remaining -= backCount;
+
+  // Fill left side
+  const leftCount = Math.min(remaining, leftCapacity);
+  for (let i = 0; i < leftCount; i++) {
+    segments.push({ side: 'left', sideIndex: i });
+  }
+  remaining -= leftCount;
+
+  // Fill right side
+  const rightCount = Math.min(remaining, rightCapacity);
+  for (let i = 0; i < rightCount; i++) {
+    segments.push({ side: 'right', sideIndex: i });
+  }
 
   return (
     <>
-      {positions.slice(0, Math.min(4, Math.ceil(railingLength / Math.max(length, width)))).map(
-        (pos, idx) => {
-          const isHorizontal = idx < 2;
-          const railingLen = isHorizontal ? length : width;
-          return (
-            <group key={idx} position={pos}>
-              {/* Main railing bar */}
-              <mesh>
-                <boxGeometry args={isHorizontal ? [railingLen, 0.05, 0.05] : [0.05, 0.05, railingLen]} />
-                <meshStandardMaterial color="#555555" />
-              </mesh>
-              {/* Top bar */}
-              <mesh position={[0, railingHeight / 2, 0]}>
-                <boxGeometry args={isHorizontal ? [railingLen, 0.05, 0.05] : [0.05, 0.05, railingLen]} />
-                <meshStandardMaterial color="#555555" />
-              </mesh>
-              {/* Bottom bar */}
-              <mesh position={[0, -railingHeight / 2, 0]}>
-                <boxGeometry args={isHorizontal ? [railingLen, 0.05, 0.05] : [0.05, 0.05, railingLen]} />
-                <meshStandardMaterial color="#555555" />
-              </mesh>
-              {/* Vertical supports */}
-              {Array.from({ length: Math.floor(railingLen / 2) }).map((_, i) => (
-                <mesh
-                  key={i}
-                  position={[
-                    isHorizontal ? (i - Math.floor(railingLen / 4)) * 2 : 0,
-                    0,
-                    isHorizontal ? 0 : (i - Math.floor(railingLen / 4)) * 2,
-                  ]}
-                >
-                  <boxGeometry args={[0.03, railingHeight, 0.03]} />
-                  <meshStandardMaterial color="#555555" />
-                </mesh>
-              ))}
-            </group>
-          );
+      {segments.map((segment, idx) => {
+        const isHorizontal = segment.side === 'front' || segment.side === 'back';
+        const sideLength = isHorizontal ? length : width;
+
+        // Calculate the center position of this segment along the side
+        // Position starts from the left/bottom edge and spaces segments evenly
+        const segmentCenterOffset = (segment.sideIndex + 0.5) * segmentLength - sideLength / 2;
+
+        // Base position for each side
+        let basePosition: [number, number, number];
+        if (segment.side === 'front') {
+          basePosition = [segmentCenterOffset, height + railingHeight / 2, -width / 2];
+        } else if (segment.side === 'back') {
+          basePosition = [segmentCenterOffset, height + railingHeight / 2, width / 2];
+        } else if (segment.side === 'left') {
+          basePosition = [-length / 2, height + railingHeight / 2, segmentCenterOffset];
+        } else {
+          // right
+          basePosition = [length / 2, height + railingHeight / 2, segmentCenterOffset];
         }
-      )}
+
+        return (
+          <group key={idx} position={basePosition}>
+            {/* Main railing bar */}
+            <mesh>
+              <boxGeometry
+                args={isHorizontal ? [segmentLength, 0.05, 0.05] : [0.05, 0.05, segmentLength]}
+              />
+              <meshStandardMaterial color="#555555" />
+            </mesh>
+            {/* Top bar */}
+            <mesh position={[0, railingHeight / 2, 0]}>
+              <boxGeometry
+                args={isHorizontal ? [segmentLength, 0.05, 0.05] : [0.05, 0.05, segmentLength]}
+              />
+              <meshStandardMaterial color="#555555" />
+            </mesh>
+            {/* Bottom bar */}
+            <mesh position={[0, -railingHeight / 2, 0]}>
+              <boxGeometry
+                args={isHorizontal ? [segmentLength, 0.05, 0.05] : [0.05, 0.05, segmentLength]}
+              />
+              <meshStandardMaterial color="#555555" />
+            </mesh>
+            {/* Vertical supports */}
+            {Array.from({ length: Math.max(1, Math.floor(segmentLength / 2)) }).map((_, i) => (
+              <mesh
+                key={i}
+                position={[
+                  isHorizontal ? (i - Math.floor(segmentLength / 4)) * 2 : 0,
+                  0,
+                  isHorizontal ? 0 : (i - Math.floor(segmentLength / 4)) * 2,
+                ]}
+              >
+                <boxGeometry args={[0.03, railingHeight, 0.03]} />
+                <meshStandardMaterial color="#555555" />
+              </mesh>
+            ))}
+          </group>
+        );
+      })}
     </>
   );
 }
 
 // Stairs component
 function Stairs({
-  length,
+  length: _length,
   width,
   height,
-  index,
+  index: _index,
   quantity,
 }: {
   length: number;
@@ -216,75 +418,99 @@ function Stairs({
   quantity: number;
 }) {
   const stairWidth = 1.0; // 1 meter wide
-  const stairLength = 3.84; // 3.84 meters long
-  const angle = Math.atan2(height, stairLength);
+  const stepHeight = 0.2; // 0.2 meters per step
+  const stepDepth = 0.3; // 0.3 meters depth per step
+  const numSteps = Math.ceil(height / stepHeight);
 
   return (
-    <group position={[length / 2 - 1, 0, -width / 2 + index * 2]}>
-      {Array.from({ length: quantity }).map((_, qIdx) => (
-        <group key={qIdx} position={[0, 0, qIdx * 2]}>
-          <mesh rotation={[0, 0, -angle]} position={[0, height / 2, 0]}>
-            <boxGeometry args={[stairLength, 0.1, stairWidth]} />
-            <meshStandardMaterial color="#555555" />
-          </mesh>
-          {/* Steps */}
-          {Array.from({ length: Math.floor(stairLength / 0.3) }).map((_, stepIdx) => (
-            <mesh
-              key={stepIdx}
-              rotation={[0, 0, -angle]}
-              position={[
-                (stepIdx - Math.floor(stairLength / 0.6)) * 0.3,
-                (stepIdx - Math.floor(stairLength / 0.6)) * (height / Math.floor(stairLength / 0.3)),
-                0,
-              ]}
-            >
-              <boxGeometry args={[0.3, 0.05, stairWidth]} />
+    <group position={[0, 0, -width / 2]}>
+      {Array.from({ length: quantity }).map((_, qIdx) => {
+        // Center stairs: for quantity=1: 0, quantity=2: -1,1, quantity=3: -2,0,2, etc.
+        const offsetX = (qIdx - (quantity - 1) / 2) * 2;
+        return (
+          <group key={qIdx} position={[offsetX, 0, 0]}>
+            {/* Vertical support beams on both sides */}
+            <mesh position={[-stairWidth / 2, height / 2, -stepDepth / 2]}>
+              <boxGeometry args={[0.1, height, 0.1]} />
               <meshStandardMaterial color="#555555" />
             </mesh>
-          ))}
-        </group>
-      ))}
+            <mesh position={[stairWidth / 2, height / 2, -stepDepth / 2]}>
+              <boxGeometry args={[0.1, height, 0.1]} />
+              <meshStandardMaterial color="#555555" />
+            </mesh>
+            {/* Steps - positioned progressively outward to create proper stair structure */}
+            {Array.from({ length: numSteps }).map((_, stepIdx) => {
+              const stepY = stepIdx * stepHeight + stepHeight / 2;
+              // Position steps progressively outward: top step flush with mezzanine edge, bottom step extends furthest
+              const stepZ = -((numSteps - 1 - stepIdx) * stepDepth + stepDepth / 2);
+              return (
+                <mesh
+                  key={stepIdx}
+                  position={[0, stepY, stepZ]}
+                >
+                  <boxGeometry args={[stairWidth, 0.05, stepDepth]} />
+                  <meshStandardMaterial color="#555555" />
+                </mesh>
+              );
+            })}
+          </group>
+        );
+      })}
     </group>
   );
 }
 
 // Pallet gate component
 function PalletGate({
-  length,
+  length: _length,
   width,
   height,
-  index,
-  gateWidth,
+  positions,
 }: {
   length: number;
   width: number;
   height: number;
-  index: number;
-  gateWidth: string;
+  positions: Array<{ x: number; width: number }>;
 }) {
-  const gateWidthNum = parseFloat(gateWidth) / 1000; // Convert mm to meters
-  const gateHeight = 2.0; // 2 meters high
+  const railingHeight = 1.1; // 1.1 meters high (matches railings)
 
   return (
-    <group position={[0, height + gateHeight / 2, -width / 2 + index * 3]}>
-      {/* Gate frame */}
-      <mesh>
-        <boxGeometry args={[gateWidthNum, gateHeight, 0.1]} />
-        <meshStandardMaterial color="#ffd700" />
-      </mesh>
-      {/* Gate bars */}
-      <mesh position={[0, 0, 0.05]}>
-        <boxGeometry args={[gateWidthNum, 0.05, 0.02]} />
-        <meshStandardMaterial color="#ffd700" />
-      </mesh>
-      <mesh position={[0, gateHeight / 2, 0.05]}>
-        <boxGeometry args={[gateWidthNum, 0.05, 0.02]} />
-        <meshStandardMaterial color="#ffd700" />
-      </mesh>
-      <mesh position={[0, -gateHeight / 2, 0.05]}>
-        <boxGeometry args={[gateWidthNum, 0.05, 0.02]} />
-        <meshStandardMaterial color="#ffd700" />
-      </mesh>
+    <group position={[0, 0, -width / 2]}>
+      {positions.map((pos, qIdx) => {
+        return (
+          <group key={qIdx} position={[pos.x, height + railingHeight / 2, 0]}>
+            {/* Main railing bar (middle) */}
+            <mesh>
+              <boxGeometry args={[pos.width, 0.05, 0.05]} />
+              <meshStandardMaterial color="#ffd700" />
+            </mesh>
+            {/* Top bar */}
+            <mesh position={[0, railingHeight / 2, 0]}>
+              <boxGeometry args={[pos.width, 0.05, 0.05]} />
+              <meshStandardMaterial color="#ffd700" />
+            </mesh>
+            {/* Bottom bar */}
+            <mesh position={[0, -railingHeight / 2, 0]}>
+              <boxGeometry args={[pos.width, 0.05, 0.05]} />
+              <meshStandardMaterial color="#ffd700" />
+            </mesh>
+            {/* Vertical supports */}
+            {Array.from({ length: Math.max(1, Math.floor(pos.width / 2)) }).map((_, i) => (
+              <mesh
+                key={i}
+                position={[
+                  (i - Math.floor(pos.width / 4)) * 2,
+                  0,
+                  0,
+                ]}
+              >
+                <boxGeometry args={[0.03, railingHeight, 0.03]} />
+                <meshStandardMaterial color="#ffd700" />
+              </mesh>
+            ))}
+          </group>
+        );
+      })}
     </group>
   );
 }

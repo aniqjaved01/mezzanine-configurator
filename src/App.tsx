@@ -8,11 +8,18 @@ import SummaryPanel from './components/SummaryPanel';
 import QuoteRequestForm from './components/QuoteRequestForm';
 
 const DEFAULT_CONFIG: MezzanineConfig = {
-  length: 9400,
-  width: 4000,
+  length: 9000,
+  width: 3000,
   height: 3000,
   loadCapacity: 250,
-  accessories: [],
+  accessories: [
+    {
+      id: 'railings-default',
+      type: 'railings',
+      quantity: 1,
+      length: 1,
+    },
+  ],
 };
 
 function App() {
@@ -25,10 +32,26 @@ function App() {
     setConfig(newConfig);
   };
 
+  const handleReset = () => {
+    // Clear localStorage
+    localStorage.removeItem('mezzanine-config');
+    // Reset to default config
+    setConfig(DEFAULT_CONFIG);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-6">
-        <h1 className="text-3xl font-bold text-gray-800 mb-6">Mezzanine Configurator</h1>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold text-gray-800">Mezzanine Configurator</h1>
+          <button
+            onClick={handleReset}
+            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded transition-colors"
+            title="Reset configuration to defaults"
+          >
+            Reset
+          </button>
+        </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left Panel - Configuration */}

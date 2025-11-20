@@ -1,5 +1,6 @@
-import { useState, FormEvent, ChangeEvent } from 'react';
-import type { MezzanineConfig, Pricing, QuoteRequest, LoadCapacity } from '../types';
+import { useState } from 'react';
+import type { FormEvent, ChangeEvent } from 'react';
+import type { MezzanineConfig, Pricing, QuoteRequest } from '../types';
 import { submitQuoteRequest } from '../services/api';
 
 interface QuoteRequestFormProps {
@@ -291,7 +292,7 @@ export default function QuoteRequestForm({ config, pricing, onClose }: QuoteRequ
               </label>
               <select
                 value={config.loadCapacity}
-                readOnly
+                disabled
                 className="w-full p-2 border border-gray-300 rounded bg-gray-100"
               >
                 <option value={250}>250 kg/m²</option>
