@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import type { MezzanineConfig, Accessory, LoadCapacity, StairType, PalletGateWidth } from '../types';
 
 interface ConfigurationPanelProps {

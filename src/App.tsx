@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import type { MezzanineConfig, Pricing } from './types';
+import type { MezzanineConfig } from './types';
 import { calculatePricing } from './utils/pricing';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import ConfigurationPanel from './components/ConfigurationPanel';

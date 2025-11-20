@@ -5,8 +5,8 @@ import type { MezzanineConfig, Pricing } from '../types';
 describe('export', () => {
   beforeEach(() => {
     // Mock document.createElement and related DOM methods
-    global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
-    global.URL.revokeObjectURL = vi.fn();
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+    globalThis.URL.revokeObjectURL = vi.fn();
     
     // Create a mock link element
     const mockLink = {
