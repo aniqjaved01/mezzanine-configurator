@@ -68,7 +68,7 @@ export default function ConfigurationPanel({ config, onConfigChange }: Configura
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Select depth (mm): {config.width.toLocaleString()}
+            Select width (mm): {config.width.toLocaleString()}
           </label>
             <input
             type="range"
