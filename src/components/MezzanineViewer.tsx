@@ -190,7 +190,7 @@ function Railings({
   height,
   quantity,
   segmentLength,
-  index: _index,
+  index,
   stairsQuantity,
   palletGatesWidths,
 }: {
@@ -308,11 +308,15 @@ function Railings({
   };
 
   // Create continuous railing segments around the perimeter
-  const railingElements: React.JSX.Element[] = [];
+  const railingElements: React.ReactElement[] = [];
   let currentDistance = 0; // Distance along perimeter where we're currently placing railings
   let remainingLength = Math.min(totalRailingLength, perimeter);
+  let iterationCount = 0;
+  const maxIterations = 1000; // Prevent infinite loops
 
-  while (remainingLength > 0) {
+  while (remainingLength > 0.01 && iterationCount < maxIterations) {
+    iterationCount++;
+    
     // Find which edge we're on
     const edgeIdx = perimeterSegments.findIndex((seg, idx) => {
       const nextEdgeStart = idx < perimeterSegments.length - 1 
@@ -329,6 +333,15 @@ function Railings({
     
     // Calculate segment length for this piece
     const segmentLen = Math.min(remainingLength, remainingOnEdge, 3); // Max 3m segments for visual clarity
+
+    // If segment is too small, skip it
+    if (segmentLen < 0.01) {
+      currentDistance += 0.1; // Move forward a bit to avoid getting stuck
+      if (currentDistance >= perimeter) {
+        currentDistance = 0;
+      }
+      continue;
+    }
 
     // Calculate position along this edge
     const t = (distanceAlongEdge + segmentLen / 2) / edge.edgeLength; // Center of segment
@@ -359,7 +372,7 @@ function Railings({
       const numPosts = Math.max(2, Math.ceil(segmentLen / postSpacing));
       
       railingElements.push(
-        <group key={`railing-${currentDistance}`} position={[posX, posY, posZ]}>
+        <group key={`railing-${index}-${currentDistance.toFixed(2)}`} position={[posX, posY, posZ]}>
           {/* Main railing bar */}
           <mesh>
             <boxGeometry
@@ -401,18 +414,17 @@ function Railings({
           })}
         </group>
       );
+      
+      // Only decrease remaining length if we actually placed a railing
+      remainingLength -= segmentLen;
     }
 
     currentDistance += segmentLen;
-    remainingLength -= segmentLen;
 
     // If we've completed the perimeter, wrap around
     if (currentDistance >= perimeter) {
       currentDistance = 0;
     }
-
-    // Safety check to prevent infinite loops
-    if (segmentLen === 0) break;
   }
 
   return <>{railingElements}</>;
