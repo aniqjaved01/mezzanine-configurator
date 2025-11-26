@@ -42,6 +42,70 @@ const calculateAvailablePerimeter = (config: MezzanineConfig): number => {
   return Math.max(0, perimeter - stairsSpace - palletGatesSpace);
 };
 
+// Helper function to automatically adjust railings to fit within available perimeter
+const autoAdjustRailingsForPerimeter = (config: MezzanineConfig): Accessory[] => {
+  const availablePerimeter = calculateAvailablePerimeter(config);
+  const currentRailingLength = calculateTotalRailingLength(config.accessories);
+  
+  // If railings fit, no adjustment needed
+  if (currentRailingLength <= availablePerimeter) {
+    return config.accessories;
+  }
+  
+  // Need to reduce railings
+  const excessLength = currentRailingLength - availablePerimeter;
+  let remainingToReduce = excessLength;
+  
+  const adjustedAccessories = [...config.accessories];
+  const railings = adjustedAccessories.filter(a => a.type === 'railings');
+  
+  // Reduce railings starting from the last one
+  for (let i = railings.length - 1; i >= 0 && remainingToReduce > 0; i--) {
+    const railing = railings[i];
+    const railingIndex = adjustedAccessories.findIndex(a => a.id === railing.id);
+    
+    if (railingIndex === -1) continue;
+    
+    const currentLength = railing.quantity * (railing.length || 0);
+    
+    if (currentLength <= remainingToReduce) {
+      // Remove this entire railing accessory
+      adjustedAccessories.splice(railingIndex, 1);
+      remainingToReduce -= currentLength;
+    } else {
+      // Reduce the length of this railing
+      const length = railing.length || 10;
+      const quantity = railing.quantity;
+      const newTotalLength = currentLength - remainingToReduce;
+      
+      // Try to adjust length first, keeping quantity same
+      const newLength = newTotalLength / quantity;
+      
+      if (newLength >= 1) {
+        // Can keep same quantity, just reduce length
+        adjustedAccessories[railingIndex] = {
+          ...railing,
+          length: Math.floor(newLength), // Round down to nearest meter
+        };
+      } else {
+        // Need to reduce quantity too
+        const newQuantity = Math.max(1, Math.floor(newTotalLength / length));
+        const finalLength = Math.floor(newTotalLength / newQuantity);
+        
+        adjustedAccessories[railingIndex] = {
+          ...railing,
+          quantity: newQuantity,
+          length: Math.max(1, finalLength),
+        };
+      }
+      
+      remainingToReduce = 0;
+    }
+  }
+  
+  return adjustedAccessories;
+};
+
 export default function ConfigurationPanel({ config, onConfigChange }: ConfigurationPanelProps) {
   const handleDimensionChange = (field: 'length' | 'width' | 'height', value: number) => {
     onConfigChange({ ...config, [field]: value });
@@ -72,10 +136,26 @@ export default function ConfigurationPanel({ config, onConfigChange }: Configura
       ...(type === 'railings' && { length: 10 }),
       ...(type === 'palletGate' && { width: '2000mm' }),
     };
-    onConfigChange({
-      ...config,
-      accessories: [...config.accessories, newAccessory],
-    });
+    
+    const newAccessories = [...config.accessories, newAccessory];
+    
+    // If adding stairs or pallet gates, automatically adjust railings if needed
+    if (type === 'stairs' || type === 'palletGate') {
+      const adjustedAccessories = autoAdjustRailingsForPerimeter({
+        ...config,
+        accessories: newAccessories,
+      });
+      
+      onConfigChange({
+        ...config,
+        accessories: adjustedAccessories,
+      });
+    } else {
+      onConfigChange({
+        ...config,
+        accessories: newAccessories,
+      });
+    }
   };
 
   const removeAccessory = (id: string) => {
@@ -111,31 +191,37 @@ export default function ConfigurationPanel({ config, onConfigChange }: Configura
       }
     }
     
-    // If adding stairs or pallet gates, check if existing railings need adjustment
-    if ((accessory.type === 'stairs' || accessory.type === 'palletGate') && updates.quantity !== undefined) {
-      const newConfig = {
-        ...config,
-        accessories: config.accessories.map((a) =>
-          a.id === id ? { ...a, ...updates } : a
-        ),
-      };
-      
-      const newAvailablePerimeter = calculateAvailablePerimeter(newConfig);
-      const currentRailingLength = calculateTotalRailingLength(newConfig.accessories);
-      
-      if (currentRailingLength > newAvailablePerimeter) {
-        const excessRailing = currentRailingLength - newAvailablePerimeter;
-        alert(`Warning: Adding this ${accessory.type} will exceed available perimeter by ${excessRailing.toFixed(2)}m. Please reduce railings first.`);
-        return;
-      }
-    }
+    // Create the updated accessories list
+    const newAccessories = config.accessories.map((a) =>
+      a.id === id ? { ...a, ...updates } : a
+    );
     
-    onConfigChange({
-      ...config,
-      accessories: config.accessories.map((a) =>
-        a.id === id ? { ...a, ...updates } : a
-      ),
-    });
+    // If updating stairs or pallet gates, automatically adjust railings if needed
+    if ((accessory.type === 'stairs' || accessory.type === 'palletGate') && updates.quantity !== undefined) {
+      const adjustedAccessories = autoAdjustRailingsForPerimeter({
+        ...config,
+        accessories: newAccessories,
+      });
+      
+      // Show message if railings were adjusted
+      const originalRailingLength = calculateTotalRailingLength(newAccessories);
+      const adjustedRailingLength = calculateTotalRailingLength(adjustedAccessories);
+      
+      if (originalRailingLength !== adjustedRailingLength) {
+        const reduced = originalRailingLength - adjustedRailingLength;
+        alert(`Railings automatically reduced by ${reduced.toFixed(2)}m to fit within available perimeter.`);
+      }
+      
+      onConfigChange({
+        ...config,
+        accessories: adjustedAccessories,
+      });
+    } else {
+      onConfigChange({
+        ...config,
+        accessories: newAccessories,
+      });
+    }
   };
 
   return (

@@ -331,11 +331,60 @@ function Railings({
     const distanceAlongEdge = currentDistance - edge.edgeStartDist;
     const remainingOnEdge = edge.edgeLength - distanceAlongEdge;
     
+    // If on front edge, check if we're in a gap (stairs/gates area)
+    if (edge.edge === 'front') {
+      const currentXPos = edge.start[0] + (edge.end[0] - edge.start[0]) * (distanceAlongEdge / edge.edgeLength);
+      
+      // Check if current position is in a gap
+      if (frontEdgeHasGap(currentXPos)) {
+        // Find the end of this gap and skip to it
+        let skipDistance = 0.1; // Default small skip
+        
+        // Find which gap we're in and skip to its end
+        for (const [minX, maxX] of [...stairsXRanges, ...palletGatesXRanges]) {
+          if (currentXPos >= minX && currentXPos <= maxX) {
+            // Calculate how much distance to skip to get past this gap
+            const gapEndX = maxX;
+            const gapEndT = (gapEndX - edge.start[0]) / (edge.end[0] - edge.start[0]);
+            const gapEndDistance = gapEndT * edge.edgeLength;
+            skipDistance = Math.max(0.1, gapEndDistance - distanceAlongEdge + 0.1); // Add 0.1m buffer
+            break;
+          }
+        }
+        
+        currentDistance += skipDistance;
+        
+        // Wrap around if needed
+        if (currentDistance >= perimeter) {
+          currentDistance = 0;
+        }
+        continue;
+      }
+    }
+    
     // Calculate segment length for this piece
-    const segmentLen = Math.min(remainingLength, remainingOnEdge, 3); // Max 3m segments for visual clarity
+    let segmentLen = Math.min(remainingLength, remainingOnEdge, 3); // Max 3m segments for visual clarity
+
+    // If on front edge, make sure segment doesn't extend into a gap
+    if (edge.edge === 'front') {
+      const startXPos = edge.start[0] + (edge.end[0] - edge.start[0]) * (distanceAlongEdge / edge.edgeLength);
+      const endXPos = edge.start[0] + (edge.end[0] - edge.start[0]) * ((distanceAlongEdge + segmentLen) / edge.edgeLength);
+      
+      // Check if segment would extend into any gap
+      for (const [minX, _maxX] of [...stairsXRanges, ...palletGatesXRanges]) {
+        // If segment would overlap with gap, truncate it
+        if (endXPos > minX && startXPos < minX) {
+          // Truncate segment to stop before the gap
+          const truncateT = (minX - edge.start[0]) / (edge.end[0] - edge.start[0]);
+          const truncateDistance = truncateT * edge.edgeLength;
+          segmentLen = Math.max(0.1, truncateDistance - distanceAlongEdge - 0.05); // Leave small buffer
+          break;
+        }
+      }
+    }
 
     // If segment is too small, skip it
-    if (segmentLen < 0.01) {
+    if (segmentLen < 0.1) {
       currentDistance += 0.1; // Move forward a bit to avoid getting stuck
       if (currentDistance >= perimeter) {
         currentDistance = 0;
@@ -349,76 +398,58 @@ function Railings({
     const posY = edge.start[1];
     const posZ = edge.start[2] + (edge.end[2] - edge.start[2]) * t;
 
-    // Check if this segment is on the front edge and overlaps with gaps
-    let shouldSkip = false;
-    if (edge.edge === 'front') {
-      // Check multiple points along the segment for gaps
-      const checkPoints = 5;
-      for (let i = 0; i < checkPoints; i++) {
-        const checkT = (distanceAlongEdge + (i / (checkPoints - 1)) * segmentLen) / edge.edgeLength;
-        const checkX = edge.start[0] + (edge.end[0] - edge.start[0]) * checkT;
-        if (frontEdgeHasGap(checkX)) {
-          shouldSkip = true;
-          break;
-        }
-      }
-    }
-
-    if (!shouldSkip) {
-      // Determine if this is a horizontal or vertical segment
-      const isHorizontal = edge.edge === 'front' || edge.edge === 'back';
-      
-      // Calculate number of posts for this segment
-      const numPosts = Math.max(2, Math.ceil(segmentLen / postSpacing));
-      
-      railingElements.push(
-        <group key={`railing-${index}-${currentDistance.toFixed(2)}`} position={[posX, posY, posZ]}>
-          {/* Main railing bar */}
-          <mesh>
-            <boxGeometry
-              args={isHorizontal ? [segmentLen, 0.05, 0.05] : [0.05, 0.05, segmentLen]}
-            />
-            <meshStandardMaterial color="#555555" />
-          </mesh>
-          {/* Top bar */}
-          <mesh position={[0, railingHeight / 2, 0]}>
-            <boxGeometry
-              args={isHorizontal ? [segmentLen, 0.05, 0.05] : [0.05, 0.05, segmentLen]}
-            />
-            <meshStandardMaterial color="#555555" />
-          </mesh>
-          {/* Bottom bar */}
-          <mesh position={[0, -railingHeight / 2, 0]}>
-            <boxGeometry
-              args={isHorizontal ? [segmentLen, 0.05, 0.05] : [0.05, 0.05, segmentLen]}
-            />
-            <meshStandardMaterial color="#555555" />
-          </mesh>
-          {/* Vertical support posts */}
-          {Array.from({ length: numPosts }).map((_, i) => {
-            const postT = i / (numPosts - 1) - 0.5; // -0.5 to 0.5
-            const postOffset = postT * segmentLen;
-            return (
-              <mesh
-                key={i}
-                position={[
-                  isHorizontal ? postOffset : 0,
-                  0,
-                  isHorizontal ? 0 : postOffset,
-                ]}
-              >
-                <boxGeometry args={[0.03, railingHeight, 0.03]} />
-                <meshStandardMaterial color="#555555" />
-              </mesh>
-            );
-          })}
-        </group>
-      );
-      
-      // Only decrease remaining length if we actually placed a railing
-      remainingLength -= segmentLen;
-    }
-
+    // Determine if this is a horizontal or vertical segment
+    const isHorizontal = edge.edge === 'front' || edge.edge === 'back';
+    
+    // Calculate number of posts for this segment
+    const numPosts = Math.max(2, Math.ceil(segmentLen / postSpacing));
+    
+    railingElements.push(
+      <group key={`railing-${index}-${currentDistance.toFixed(2)}`} position={[posX, posY, posZ]}>
+        {/* Main railing bar */}
+        <mesh>
+          <boxGeometry
+            args={isHorizontal ? [segmentLen, 0.05, 0.05] : [0.05, 0.05, segmentLen]}
+          />
+          <meshStandardMaterial color="#555555" />
+        </mesh>
+        {/* Top bar */}
+        <mesh position={[0, railingHeight / 2, 0]}>
+          <boxGeometry
+            args={isHorizontal ? [segmentLen, 0.05, 0.05] : [0.05, 0.05, segmentLen]}
+          />
+          <meshStandardMaterial color="#555555" />
+        </mesh>
+        {/* Bottom bar */}
+        <mesh position={[0, -railingHeight / 2, 0]}>
+          <boxGeometry
+            args={isHorizontal ? [segmentLen, 0.05, 0.05] : [0.05, 0.05, segmentLen]}
+          />
+          <meshStandardMaterial color="#555555" />
+        </mesh>
+        {/* Vertical support posts */}
+        {Array.from({ length: numPosts }).map((_, i) => {
+          const postT = i / (numPosts - 1) - 0.5; // -0.5 to 0.5
+          const postOffset = postT * segmentLen;
+          return (
+            <mesh
+              key={i}
+              position={[
+                isHorizontal ? postOffset : 0,
+                0,
+                isHorizontal ? 0 : postOffset,
+              ]}
+            >
+              <boxGeometry args={[0.03, railingHeight, 0.03]} />
+              <meshStandardMaterial color="#555555" />
+            </mesh>
+          );
+        })}
+      </group>
+    );
+    
+    // Decrease remaining length
+    remainingLength -= segmentLen;
     currentDistance += segmentLen;
 
     // If we've completed the perimeter, wrap around
