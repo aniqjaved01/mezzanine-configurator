@@ -301,12 +301,6 @@ function Railings({
     },
   ];
 
-  // Helper to check if a position on front edge overlaps with stairs/gates
-  const frontEdgeHasGap = (xPos: number): boolean => {
-    return stairsXRanges.some(([minX, maxX]) => xPos >= minX && xPos <= maxX) ||
-           palletGatesXRanges.some(([minX, maxX]) => xPos >= minX && xPos <= maxX);
-  };
-
   // Create continuous railing segments around the perimeter
   const railingElements: React.ReactElement[] = [];
   let currentDistance = 0; // Distance along perimeter where we're currently placing railings
@@ -335,24 +329,26 @@ function Railings({
     if (edge.edge === 'front') {
       const currentXPos = edge.start[0] + (edge.end[0] - edge.start[0]) * (distanceAlongEdge / edge.edgeLength);
       
-      // Check if current position is in a gap
-      if (frontEdgeHasGap(currentXPos)) {
-        // Find the end of this gap and skip to it
-        let skipDistance = 0.1; // Default small skip
-        
-        // Find which gap we're in and skip to its end
-        for (const [minX, maxX] of [...stairsXRanges, ...palletGatesXRanges]) {
-          if (currentXPos >= minX && currentXPos <= maxX) {
-            // Calculate how much distance to skip to get past this gap
-            const gapEndX = maxX;
-            const gapEndT = (gapEndX - edge.start[0]) / (edge.end[0] - edge.start[0]);
-            const gapEndDistance = gapEndT * edge.edgeLength;
-            skipDistance = Math.max(0.1, gapEndDistance - distanceAlongEdge + 0.1); // Add 0.1m buffer
-            break;
-          }
+      // Check if current position is in a gap - with NO buffer
+      let inGap = false;
+      let skipToX = currentXPos;
+      
+      for (const [minX, maxX] of [...stairsXRanges, ...palletGatesXRanges]) {
+        if (currentXPos >= minX && currentXPos <= maxX) {
+          // We're inside a gap, skip to the end of it with no buffer
+          inGap = true;
+          skipToX = maxX;
+          break;
         }
+      }
+      
+      if (inGap) {
+        // Calculate distance to skip
+        const skipToT = (skipToX - edge.start[0]) / (edge.end[0] - edge.start[0]);
+        const skipToDistance = skipToT * edge.edgeLength;
+        const skipAmount = Math.max(0.01, skipToDistance - distanceAlongEdge);
         
-        currentDistance += skipDistance;
+        currentDistance += skipAmount;
         
         // Wrap around if needed
         if (currentDistance >= perimeter) {
@@ -370,22 +366,21 @@ function Railings({
       const startXPos = edge.start[0] + (edge.end[0] - edge.start[0]) * (distanceAlongEdge / edge.edgeLength);
       const endXPos = edge.start[0] + (edge.end[0] - edge.start[0]) * ((distanceAlongEdge + segmentLen) / edge.edgeLength);
       
-      // Check if segment would extend into any gap
+      // Check if segment would extend into any gap - truncate with NO buffer
       for (const [minX, _maxX] of [...stairsXRanges, ...palletGatesXRanges]) {
-        // If segment would overlap with gap, truncate it
         if (endXPos > minX && startXPos < minX) {
-          // Truncate segment to stop before the gap
+          // Truncate segment to stop exactly at the gap edge
           const truncateT = (minX - edge.start[0]) / (edge.end[0] - edge.start[0]);
           const truncateDistance = truncateT * edge.edgeLength;
-          segmentLen = Math.max(0.1, truncateDistance - distanceAlongEdge - 0.05); // Leave small buffer
+          segmentLen = Math.max(0.05, truncateDistance - distanceAlongEdge);
           break;
         }
       }
     }
 
     // If segment is too small, skip it
-    if (segmentLen < 0.1) {
-      currentDistance += 0.1; // Move forward a bit to avoid getting stuck
+    if (segmentLen < 0.05) {
+      currentDistance += 0.05;
       if (currentDistance >= perimeter) {
         currentDistance = 0;
       }
