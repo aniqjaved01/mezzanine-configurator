@@ -183,7 +183,7 @@ function SupportColumns({
   );
 }
 
-// Railings component
+// Railings component - creates continuous perimeter railings that wrap around corners
 function Railings({
   length,
   width,
@@ -205,35 +205,35 @@ function Railings({
 }) {
   const railingHeight = 1.1; // 1.1 meters
   const stairWidth = 1.0; // 1 meter wide (matches Stairs component)
+  const postSpacing = 2.0; // meters between posts
 
-  // Calculate X-axis ranges occupied by stairs
-  // Each stair is 1.0m wide, spaced 2m apart (center-to-center)
-  // For quantity N, calculate occupied X ranges
+  // Calculate total perimeter length
+  const perimeter = 2 * (length + width);
+  
+  // Calculate total railing length needed
+  const totalRailingLength = quantity * segmentLength;
+  
+  // If no railings needed, return nothing
+  if (totalRailingLength <= 0) return null;
+
+  // Calculate X-axis ranges occupied by stairs on the front edge
   const getStairsXRanges = (quantity: number): Array<[number, number]> => {
     if (quantity === 0) return [];
     const ranges: Array<[number, number]> = [];
     for (let qIdx = 0; qIdx < quantity; qIdx++) {
-      // Center stairs: for quantity=1: 0, quantity=2: -1,1, quantity=3: -2,0,2, etc.
       const offsetX = (qIdx - (quantity - 1) / 2) * 2;
-      // Each stair occupies: X from (offsetX - 0.5) to (offsetX + 0.5)
       ranges.push([offsetX - stairWidth / 2, offsetX + stairWidth / 2]);
     }
     return ranges;
   };
 
-  // Calculate X-axis ranges occupied by pallet gates
-  // Since each PalletGate component positions its gates independently (centered),
-  // we need to account for all possible positions. For simplicity, we'll position
-  // all gates in sequence with proper spacing, centered as a group.
+  // Calculate X-axis ranges occupied by pallet gates on the front edge
   const getPalletGatesXRanges = (widths: number[]): Array<[number, number]> => {
     if (widths.length === 0) return [];
     const ranges: Array<[number, number]> = [];
-    
-    // Position all gates in sequence, centered as a group
     let currentX = 0;
     let totalSpan = 0;
     
-    // First, calculate total span needed
     widths.forEach((gateWidth, idx) => {
       if (idx > 0) {
         const prevWidth = widths[idx - 1];
@@ -243,7 +243,6 @@ function Railings({
       totalSpan += gateWidth;
     });
     
-    // Now position gates starting from the left edge of the group
     currentX = -totalSpan / 2;
     
     widths.forEach((gateWidth, idx) => {
@@ -253,7 +252,6 @@ function Railings({
         currentX += spacing;
       }
       currentX += gateWidth / 2;
-      // Each gate occupies: X from (currentX - gateWidth/2) to (currentX + gateWidth/2)
       ranges.push([currentX - gateWidth / 2, currentX + gateWidth / 2]);
       currentX += gateWidth / 2;
     });
@@ -264,142 +262,160 @@ function Railings({
   const stairsXRanges = getStairsXRanges(stairsQuantity);
   const palletGatesXRanges = getPalletGatesXRanges(palletGatesWidths);
 
-  // Helper function to check if a railing segment overlaps with any stair
-  const overlapsWithStairs = (segmentCenterX: number, segmentLength: number): boolean => {
-    const segmentMinX = segmentCenterX - segmentLength / 2;
-    const segmentMaxX = segmentCenterX + segmentLength / 2;
-    return stairsXRanges.some(([stairMinX, stairMaxX]) => {
-      // Check if segments overlap
-      return segmentMinX < stairMaxX && segmentMaxX > stairMinX;
-    });
+  // Define perimeter path: front-left corner → front-right corner → back-right corner → back-left corner → front-left corner
+  // Each segment defines: start point, end point, which edge it's on
+  const perimeterSegments: Array<{
+    start: [number, number, number];
+    end: [number, number, number];
+    edge: 'front' | 'right' | 'back' | 'left';
+    edgeLength: number;
+    edgeStartDist: number; // Distance from perimeter start to edge start
+  }> = [
+    {
+      start: [-length / 2, height + railingHeight / 2, -width / 2],
+      end: [length / 2, height + railingHeight / 2, -width / 2],
+      edge: 'front',
+      edgeLength: length,
+      edgeStartDist: 0,
+    },
+    {
+      start: [length / 2, height + railingHeight / 2, -width / 2],
+      end: [length / 2, height + railingHeight / 2, width / 2],
+      edge: 'right',
+      edgeLength: width,
+      edgeStartDist: length,
+    },
+    {
+      start: [length / 2, height + railingHeight / 2, width / 2],
+      end: [-length / 2, height + railingHeight / 2, width / 2],
+      edge: 'back',
+      edgeLength: length,
+      edgeStartDist: length + width,
+    },
+    {
+      start: [-length / 2, height + railingHeight / 2, width / 2],
+      end: [-length / 2, height + railingHeight / 2, -width / 2],
+      edge: 'left',
+      edgeLength: width,
+      edgeStartDist: 2 * length + width,
+    },
+  ];
+
+  // Helper to check if a position on front edge overlaps with stairs/gates
+  const frontEdgeHasGap = (xPos: number): boolean => {
+    return stairsXRanges.some(([minX, maxX]) => xPos >= minX && xPos <= maxX) ||
+           palletGatesXRanges.some(([minX, maxX]) => xPos >= minX && xPos <= maxX);
   };
 
-  // Helper function to check if a railing segment overlaps with any pallet gate
-  const overlapsWithPalletGates = (segmentCenterX: number, segmentLength: number): boolean => {
-    const segmentMinX = segmentCenterX - segmentLength / 2;
-    const segmentMaxX = segmentCenterX + segmentLength / 2;
-    return palletGatesXRanges.some(([gateMinX, gateMaxX]) => {
-      // Check if segments overlap
-      return segmentMinX < gateMaxX && segmentMaxX > gateMinX;
+  // Create continuous railing segments around the perimeter
+  const railingElements: React.JSX.Element[] = [];
+  let currentDistance = 0; // Distance along perimeter where we're currently placing railings
+  let remainingLength = Math.min(totalRailingLength, perimeter);
+
+  while (remainingLength > 0) {
+    // Find which edge we're on
+    const edgeIdx = perimeterSegments.findIndex((seg, idx) => {
+      const nextEdgeStart = idx < perimeterSegments.length - 1 
+        ? perimeterSegments[idx + 1].edgeStartDist 
+        : perimeter;
+      return currentDistance >= seg.edgeStartDist && currentDistance < nextEdgeStart;
     });
-  };
 
-  // Calculate capacity for each side
-  const frontCapacity = Math.floor(length / segmentLength);
-  const backCapacity = Math.floor(length / segmentLength);
-  const leftCapacity = Math.floor(width / segmentLength);
-  const rightCapacity = Math.floor(width / segmentLength);
+    if (edgeIdx === -1) break; // Safety check
 
-  // Distribute quantity across sides: front → back → left → right
-  const segments: Array<{
-    side: 'front' | 'back' | 'left' | 'right';
-    sideIndex: number; // Index within the side (0, 1, 2, ...)
-  }> = [];
-
-  let remaining = quantity;
-
-  // Fill front side, skipping segments that overlap with stairs or pallet gates
-  let frontSideIndex = 0;
-  let frontCount = 0;
-  while (remaining > 0 && frontSideIndex < frontCapacity) {
-    // Calculate the center position of this potential segment
-    const segmentCenterOffset = (frontSideIndex + 0.5) * segmentLength - length / 2;
+    const edge = perimeterSegments[edgeIdx];
+    const distanceAlongEdge = currentDistance - edge.edgeStartDist;
+    const remainingOnEdge = edge.edgeLength - distanceAlongEdge;
     
-    // Check if this segment would overlap with stairs or pallet gates
-    if (!overlapsWithStairs(segmentCenterOffset, segmentLength) && 
-        !overlapsWithPalletGates(segmentCenterOffset, segmentLength)) {
-      segments.push({ side: 'front', sideIndex: frontSideIndex });
-      remaining--;
-      frontCount++;
-    }
-    frontSideIndex++;
-  }
+    // Calculate segment length for this piece
+    const segmentLen = Math.min(remainingLength, remainingOnEdge, 3); // Max 3m segments for visual clarity
 
-  // Fill back side
-  const backCount = Math.min(remaining, backCapacity);
-  for (let i = 0; i < backCount; i++) {
-    segments.push({ side: 'back', sideIndex: i });
-  }
-  remaining -= backCount;
+    // Calculate position along this edge
+    const t = (distanceAlongEdge + segmentLen / 2) / edge.edgeLength; // Center of segment
+    const posX = edge.start[0] + (edge.end[0] - edge.start[0]) * t;
+    const posY = edge.start[1];
+    const posZ = edge.start[2] + (edge.end[2] - edge.start[2]) * t;
 
-  // Fill left side
-  const leftCount = Math.min(remaining, leftCapacity);
-  for (let i = 0; i < leftCount; i++) {
-    segments.push({ side: 'left', sideIndex: i });
-  }
-  remaining -= leftCount;
-
-  // Fill right side
-  const rightCount = Math.min(remaining, rightCapacity);
-  for (let i = 0; i < rightCount; i++) {
-    segments.push({ side: 'right', sideIndex: i });
-  }
-
-  return (
-    <>
-      {segments.map((segment, idx) => {
-        const isHorizontal = segment.side === 'front' || segment.side === 'back';
-        const sideLength = isHorizontal ? length : width;
-
-        // Calculate the center position of this segment along the side
-        // Position starts from the left/bottom edge and spaces segments evenly
-        const segmentCenterOffset = (segment.sideIndex + 0.5) * segmentLength - sideLength / 2;
-
-        // Base position for each side
-        let basePosition: [number, number, number];
-        if (segment.side === 'front') {
-          basePosition = [segmentCenterOffset, height + railingHeight / 2, -width / 2];
-        } else if (segment.side === 'back') {
-          basePosition = [segmentCenterOffset, height + railingHeight / 2, width / 2];
-        } else if (segment.side === 'left') {
-          basePosition = [-length / 2, height + railingHeight / 2, segmentCenterOffset];
-        } else {
-          // right
-          basePosition = [length / 2, height + railingHeight / 2, segmentCenterOffset];
+    // Check if this segment is on the front edge and overlaps with gaps
+    let shouldSkip = false;
+    if (edge.edge === 'front') {
+      // Check multiple points along the segment for gaps
+      const checkPoints = 5;
+      for (let i = 0; i < checkPoints; i++) {
+        const checkT = (distanceAlongEdge + (i / (checkPoints - 1)) * segmentLen) / edge.edgeLength;
+        const checkX = edge.start[0] + (edge.end[0] - edge.start[0]) * checkT;
+        if (frontEdgeHasGap(checkX)) {
+          shouldSkip = true;
+          break;
         }
+      }
+    }
 
-        return (
-          <group key={idx} position={basePosition}>
-            {/* Main railing bar */}
-            <mesh>
-              <boxGeometry
-                args={isHorizontal ? [segmentLength, 0.05, 0.05] : [0.05, 0.05, segmentLength]}
-              />
-              <meshStandardMaterial color="#555555" />
-            </mesh>
-            {/* Top bar */}
-            <mesh position={[0, railingHeight / 2, 0]}>
-              <boxGeometry
-                args={isHorizontal ? [segmentLength, 0.05, 0.05] : [0.05, 0.05, segmentLength]}
-              />
-              <meshStandardMaterial color="#555555" />
-            </mesh>
-            {/* Bottom bar */}
-            <mesh position={[0, -railingHeight / 2, 0]}>
-              <boxGeometry
-                args={isHorizontal ? [segmentLength, 0.05, 0.05] : [0.05, 0.05, segmentLength]}
-              />
-              <meshStandardMaterial color="#555555" />
-            </mesh>
-            {/* Vertical supports */}
-            {Array.from({ length: Math.max(1, Math.floor(segmentLength / 2)) }).map((_, i) => (
+    if (!shouldSkip) {
+      // Determine if this is a horizontal or vertical segment
+      const isHorizontal = edge.edge === 'front' || edge.edge === 'back';
+      
+      // Calculate number of posts for this segment
+      const numPosts = Math.max(2, Math.ceil(segmentLen / postSpacing));
+      
+      railingElements.push(
+        <group key={`railing-${currentDistance}`} position={[posX, posY, posZ]}>
+          {/* Main railing bar */}
+          <mesh>
+            <boxGeometry
+              args={isHorizontal ? [segmentLen, 0.05, 0.05] : [0.05, 0.05, segmentLen]}
+            />
+            <meshStandardMaterial color="#555555" />
+          </mesh>
+          {/* Top bar */}
+          <mesh position={[0, railingHeight / 2, 0]}>
+            <boxGeometry
+              args={isHorizontal ? [segmentLen, 0.05, 0.05] : [0.05, 0.05, segmentLen]}
+            />
+            <meshStandardMaterial color="#555555" />
+          </mesh>
+          {/* Bottom bar */}
+          <mesh position={[0, -railingHeight / 2, 0]}>
+            <boxGeometry
+              args={isHorizontal ? [segmentLen, 0.05, 0.05] : [0.05, 0.05, segmentLen]}
+            />
+            <meshStandardMaterial color="#555555" />
+          </mesh>
+          {/* Vertical support posts */}
+          {Array.from({ length: numPosts }).map((_, i) => {
+            const postT = i / (numPosts - 1) - 0.5; // -0.5 to 0.5
+            const postOffset = postT * segmentLen;
+            return (
               <mesh
                 key={i}
                 position={[
-                  isHorizontal ? (i - Math.floor(segmentLength / 4)) * 2 : 0,
+                  isHorizontal ? postOffset : 0,
                   0,
-                  isHorizontal ? 0 : (i - Math.floor(segmentLength / 4)) * 2,
+                  isHorizontal ? 0 : postOffset,
                 ]}
               >
                 <boxGeometry args={[0.03, railingHeight, 0.03]} />
                 <meshStandardMaterial color="#555555" />
               </mesh>
-            ))}
-          </group>
-        );
-      })}
-    </>
-  );
+            );
+          })}
+        </group>
+      );
+    }
+
+    currentDistance += segmentLen;
+    remainingLength -= segmentLen;
+
+    // If we've completed the perimeter, wrap around
+    if (currentDistance >= perimeter) {
+      currentDistance = 0;
+    }
+
+    // Safety check to prevent infinite loops
+    if (segmentLen === 0) break;
+  }
+
+  return <>{railingElements}</>;
 }
 
 // Stairs component
