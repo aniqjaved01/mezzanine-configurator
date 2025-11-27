@@ -32,8 +32,13 @@ export default function SummaryPanel({ config, pricing, onRequestQuote }: Summar
 
   const getAccessoryDescription = (accessory: typeof config.accessories[0]): string => {
     switch (accessory.type) {
-      case 'stairs':
-        return `Stairs 38° H${config.height}xL3840xB1000mm`;
+      case 'stairs': {
+        const isVinkel = accessory.stairType?.includes('Vinkel');
+        if (isVinkel) {
+          return `${accessory.stairType}, H${config.height}xL3840xB1000mm with Repos H3000xL1400xB1400mm`;
+        }
+        return `Stairs 38°, ${accessory.stairType || 'Straight 1m'} H${config.height}xL3840xB1000mm`;
+      }
       case 'railings':
         return `Railings H1100mm with kick plate, ${accessory.length || 0} meters`;
       case 'palletGate':

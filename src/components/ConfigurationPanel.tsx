@@ -169,6 +169,19 @@ export default function ConfigurationPanel({ config, onConfigChange }: Configura
     const accessory = config.accessories.find(a => a.id === id);
     if (!accessory) return;
     
+    // If updating stairs to/from Vinkel type, validate
+    if (accessory.type === 'stairs' && updates.stairType) {
+      const isVinkel = updates.stairType.includes('Vinkel');
+      const currentVinkelStairs = config.accessories.filter(
+        a => a.type === 'stairs' && a.stairType?.includes('Vinkel') && a.id !== id
+      );
+      
+      if (isVinkel && currentVinkelStairs.length > 0) {
+        alert('Only one Vinkel (corner) stair is allowed at a time. Please remove the existing Vinkel stair first.');
+        return;
+      }
+    }
+    
     // If updating railings, validate against available perimeter
     if (accessory.type === 'railings') {
       const availablePerimeter = calculateAvailablePerimeter(config);
@@ -381,7 +394,14 @@ export default function ConfigurationPanel({ config, onConfigChange }: Configura
                     <option value="Straight 1m">Straight 1m</option>
                     <option value="Straight 1.5m">Straight 1.5m</option>
                     <option value="Straight 2m">Straight 2m</option>
+                    <option value="Vinkel 1m">Vinkel 1m</option>
+                    <option value="Vinkel 1.2m">Vinkel 1.2m</option>
                   </select>
+                  {accessory.stairType?.includes('Vinkel') && (
+                    <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
+                      Corner stair with Repos platform (3m × 1.4m)
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() =>
@@ -390,6 +410,7 @@ export default function ConfigurationPanel({ config, onConfigChange }: Configura
                         })
                       }
                       className="px-2 py-1 bg-gray-200 rounded"
+                      disabled={accessory.stairType?.includes('Vinkel')}
                     >
                       −
                     </button>
@@ -399,10 +420,16 @@ export default function ConfigurationPanel({ config, onConfigChange }: Configura
                         updateAccessory(accessory.id, { quantity: accessory.quantity + 1 })
                       }
                       className="px-2 py-1 bg-gray-200 rounded"
+                      disabled={accessory.stairType?.includes('Vinkel')}
                     >
                       +
                     </button>
                   </div>
+                  {accessory.stairType?.includes('Vinkel') && (
+                    <div className="text-xs text-gray-500">
+                      Quantity fixed to 1 for Vinkel stairs
+                    </div>
+                  )}
                 </div>
               )}
 

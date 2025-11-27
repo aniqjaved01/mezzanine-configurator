@@ -14,18 +14,32 @@ const LOAD_MULTIPLIERS: Record<number, number> = {
 
 // Accessory base prices
 const STAIRS_BASE_PRICE = 15000;
+const VINKEL_STAIRS_BASE_PRICE = 25000; // Vinkel stairs cost more (includes Repos platform)
 const RAILING_PRICE_PER_METER = 800;
 const PALLET_GATE_BASE_PRICE = 12000;
+
+// Repos platform dimensions (fixed)
+const REPOS_LENGTH = 3.0; // meters
+const REPOS_DEPTH = 1.4; // meters
+const REPOS_AREA = REPOS_LENGTH * REPOS_DEPTH; // 4.2 m²
 
 // Leasing interest factors
 const LEASING_3_YEARS_FACTOR = 0.029; // 2.9% annual interest
 const LEASING_5_YEARS_FACTOR = 0.035; // 3.5% annual interest
 
 /**
- * Calculate square meters from dimensions
+ * Calculate square meters from dimensions (including Repos if Vinkel stairs present)
  */
-export function calculateSquareMeters(length: number, width: number): number {
-  return (length * width) / 1000000; // Convert mm² to m²
+export function calculateSquareMeters(length: number, width: number, accessories: Accessory[] = []): number {
+  let baseArea = (length * width) / 1000000; // Convert mm² to m²
+  
+  // Check if there's a Vinkel stair - if so, add Repos area
+  const hasVinkelStair = accessories.some(a => a.type === 'stairs' && a.stairType?.includes('Vinkel'));
+  if (hasVinkelStair) {
+    baseArea += REPOS_AREA;
+  }
+  
+  return baseArea;
 }
 
 /**
@@ -51,9 +65,13 @@ function calculateAccessoriesPrice(accessories: Accessory[]): number {
 
   for (const accessory of accessories) {
     switch (accessory.type) {
-      case 'stairs':
-        total += STAIRS_BASE_PRICE * accessory.quantity;
+      case 'stairs': {
+        // Check if it's a Vinkel stair
+        const isVinkel = accessory.stairType?.includes('Vinkel');
+        const stairPrice = isVinkel ? VINKEL_STAIRS_BASE_PRICE : STAIRS_BASE_PRICE;
+        total += stairPrice * accessory.quantity;
         break;
+      }
       case 'railings':
         if (accessory.length) {
           total += RAILING_PRICE_PER_METER * accessory.length * accessory.quantity;
@@ -72,7 +90,7 @@ function calculateAccessoriesPrice(accessories: Accessory[]): number {
  * Calculate total pricing for a mezzanine configuration
  */
 export function calculatePricing(config: MezzanineConfig): Pricing {
-  const squareMeters = calculateSquareMeters(config.length, config.width);
+  const squareMeters = calculateSquareMeters(config.length, config.width, config.accessories);
   
   const basePrice = BASE_PRICE;
   const dimensionPrice = calculateDimensionPrice(config.length, config.width, config.height);

@@ -1,6 +1,6 @@
 export type LoadCapacity = 250 | 350 | 500;
 
-export type StairType = 'Straight 1m' | 'Straight 1.5m' | 'Straight 2m';
+export type StairType = 'Straight 1m' | 'Straight 1.5m' | 'Straight 2m' | 'Vinkel 1m' | 'Vinkel 1.2m';
 export type PalletGateWidth = '2000mm' | '2500mm' | '3000mm';
 
 export interface Accessory {
