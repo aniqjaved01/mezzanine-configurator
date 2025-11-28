@@ -491,11 +491,12 @@ function Railings({
     if (edge.edge === 'repos-right' && hasRepos) {
       // Skip the entire Vinkel stair area (where stairs descend from Repos)
       currentDistance += remainingOnEdge;
-      if (currentDistance >= perimeter) currentDistance = 0;
+      if (currentDistance >= perimeter) break; // Stop if we've completed the perimeter
       continue;
     }
     
     // Check for gaps on front edge (regular stairs/pallet gates)
+    // Only apply this if there are actual regular stairs (non-Vinkel) on the front edge
     if (edge.edge === 'front') {
       const currentXPos = edge.start[0] + (edge.end[0] - edge.start[0]) * (distanceAlongEdge / edge.edgeLength);
       
@@ -503,7 +504,10 @@ function Railings({
       let inGap = false;
       let skipToX = currentXPos;
       
-      for (const [minX, maxX] of [...stairsXRanges, ...palletGatesXRanges]) {
+      // Only check for gaps from pallet gates, not stairs (when Vinkel is present)
+      const gapsToCheck = hasRepos ? [...palletGatesXRanges] : [...stairsXRanges, ...palletGatesXRanges];
+      
+      for (const [minX, maxX] of gapsToCheck) {
         if (currentXPos >= minX && currentXPos <= maxX) {
           inGap = true;
           skipToX = maxX;
@@ -517,7 +521,7 @@ function Railings({
         const skipAmount = Math.max(0.01, skipToDistance - distanceAlongEdge);
         
         currentDistance += skipAmount;
-        if (currentDistance >= perimeter) currentDistance = 0;
+        if (currentDistance >= perimeter) break; // Stop if we've completed the perimeter
         continue;
       }
     }
@@ -530,7 +534,10 @@ function Railings({
       const startXPos = edge.start[0] + (edge.end[0] - edge.start[0]) * (distanceAlongEdge / edge.edgeLength);
       const endXPos = edge.start[0] + (edge.end[0] - edge.start[0]) * ((distanceAlongEdge + segmentLen) / edge.edgeLength);
       
-      for (const [minX, _maxX] of [...stairsXRanges, ...palletGatesXRanges]) {
+      // Only check for gaps from pallet gates, not stairs (when Vinkel is present)
+      const gapsToCheck = hasRepos ? [...palletGatesXRanges] : [...stairsXRanges, ...palletGatesXRanges];
+      
+      for (const [minX, _maxX] of gapsToCheck) {
         if (endXPos > minX && startXPos < minX) {
           const truncateT = (minX - edge.start[0]) / (edge.end[0] - edge.start[0]);
           const truncateDistance = truncateT * edge.edgeLength;
@@ -542,7 +549,7 @@ function Railings({
 
     if (segmentLen < 0.05) {
       currentDistance += 0.05;
-      if (currentDistance >= perimeter) currentDistance = 0;
+      if (currentDistance >= perimeter) break; // Stop if we've completed the perimeter
       continue;
     }
 
@@ -601,8 +608,9 @@ function Railings({
     remainingLength -= segmentLen;
     currentDistance += segmentLen;
 
+    // If we've completed the perimeter, stop to avoid wrapping/overlapping
     if (currentDistance >= perimeter) {
-      currentDistance = 0;
+      break;
     }
   }
 

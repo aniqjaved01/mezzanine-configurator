@@ -5,16 +5,42 @@ interface ConfigurationPanelProps {
   onConfigChange: (config: MezzanineConfig) => void;
 }
 
-// Helper function to calculate perimeter in meters
-const calculatePerimeter = (length: number, width: number): number => {
-  return 2 * ((length / 1000) + (width / 1000));
+// Repos platform dimensions (fixed) - matches MezzanineViewer.tsx
+const REPOS_LENGTH = 3.0; // meters
+const REPOS_DEPTH = 1.4; // meters
+
+// Helper function to calculate perimeter in meters (including Repos if Vinkel stairs present)
+const calculatePerimeter = (length: number, width: number, accessories: Accessory[]): number => {
+  let perimeter = 2 * ((length / 1000) + (width / 1000));
+  
+  // Check if Vinkel stair exists (adds Repos platform)
+  const hasVinkelStair = accessories.some(a => a.type === 'stairs' && a.stairType?.includes('Vinkel'));
+  if (hasVinkelStair) {
+    // Add Repos perimeter contribution: left edge + front edge + right edge
+    // (reposDepth + reposLength + reposDepth)
+    perimeter += 2 * REPOS_DEPTH + REPOS_LENGTH; // Add 5.8m
+  }
+  
+  return perimeter;
 };
 
-// Helper function to calculate space occupied by stairs (each stair is 1m wide)
+// Helper function to calculate space occupied by stairs
 const calculateStairsSpace = (accessories: Accessory[]): number => {
-  return accessories
+  let space = 0;
+  
+  accessories
     .filter(a => a.type === 'stairs')
-    .reduce((sum, stair) => sum + (stair.quantity * 1.0), 0); // 1m per stair
+    .forEach(stair => {
+      // Regular stairs: 1m per stair on the front edge
+      space += stair.quantity * 1.0;
+      
+      // Vinkel stairs also occupy the repos-right edge (1.4m)
+      if (stair.stairType?.includes('Vinkel')) {
+        space += REPOS_DEPTH; // Add 1.4m for the repos-right edge
+      }
+    });
+  
+  return space;
 };
 
 // Helper function to calculate space occupied by pallet gates
@@ -36,7 +62,7 @@ const calculateTotalRailingLength = (accessories: Accessory[]): number => {
 
 // Helper function to calculate available perimeter for railings
 const calculateAvailablePerimeter = (config: MezzanineConfig): number => {
-  const perimeter = calculatePerimeter(config.length, config.width);
+  const perimeter = calculatePerimeter(config.length, config.width, config.accessories);
   const stairsSpace = calculateStairsSpace(config.accessories);
   const palletGatesSpace = calculatePalletGatesSpace(config.accessories);
   return Math.max(0, perimeter - stairsSpace - palletGatesSpace);
@@ -295,7 +321,7 @@ export default function ConfigurationPanel({ config, onConfigChange }: Configura
         <div className="text-xs space-y-1 text-blue-800">
           <div className="flex justify-between">
             <span>Total Perimeter:</span>
-            <span className="font-medium">{calculatePerimeter(config.length, config.width).toFixed(2)}m</span>
+            <span className="font-medium">{calculatePerimeter(config.length, config.width, config.accessories).toFixed(2)}m</span>
           </div>
           <div className="flex justify-between">
             <span>Stairs Space:</span>
