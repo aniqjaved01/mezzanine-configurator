@@ -305,8 +305,9 @@ function Railings({
   // Calculate total perimeter length (including Repos if present)
   let perimeter = 2 * (length + width);
   if (hasRepos) {
-    // Add Repos perimeter contribution: left edge (reposDepth) + front extension (reposLength)
-    perimeter += reposDepth + reposLength;
+    // Add Repos perimeter contribution: left edge + front edge + right edge
+    // (reposDepth + reposLength + reposDepth)
+    perimeter += 2 * reposDepth + reposLength;
   }
   
   // Calculate total railing length needed
@@ -365,7 +366,7 @@ function Railings({
   const perimeterSegments: Array<{
     start: [number, number, number];
     end: [number, number, number];
-    edge: 'front' | 'right' | 'back' | 'left' | 'repos-left' | 'repos-front';
+    edge: 'front' | 'right' | 'back' | 'left' | 'repos-left' | 'repos-front' | 'repos-right';
     edgeLength: number;
     edgeStartDist: number;
   }> = [];
@@ -399,7 +400,17 @@ function Railings({
     });
     currentDist += reposLength;
     
-    // 3. Front edge (from end of Repos to right corner)
+    // 3. Repos right edge (connecting back to main platform)
+    perimeterSegments.push({
+      start: [reposLeftX + reposLength, height + railingHeight / 2, reposOuterZ],
+      end: [reposLeftX + reposLength, height + railingHeight / 2, reposFrontZ],
+      edge: 'repos-right',
+      edgeLength: reposDepth,
+      edgeStartDist: currentDist,
+    });
+    currentDist += reposDepth;
+    
+    // 4. Front edge (from end of Repos to right corner)
     const frontStartX = reposLeftX + reposLength;
     const frontEndX = length / 2;
     const frontLength = frontEndX - frontStartX;
@@ -476,9 +487,9 @@ function Railings({
     const distanceAlongEdge = currentDistance - edge.edgeStartDist;
     const remainingOnEdge = edge.edgeLength - distanceAlongEdge;
     
-    // Skip gaps on repos-front edge (where Vinkel stairs are)
-    if (edge.edge === 'repos-front' && hasRepos) {
-      // Skip the entire Vinkel stair area (centered on Repos)
+    // Skip gaps on repos-right edge (where Vinkel stairs are)
+    if (edge.edge === 'repos-right' && hasRepos) {
+      // Skip the entire Vinkel stair area (where stairs descend from Repos)
       currentDistance += remainingOnEdge;
       if (currentDistance >= perimeter) currentDistance = 0;
       continue;
