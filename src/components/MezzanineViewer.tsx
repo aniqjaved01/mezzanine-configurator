@@ -631,26 +631,26 @@ function Stairs({
     const reposX = -length / 2 + reposLength / 2;
     const reposZ = -width / 2 - reposDepth / 2;
     
-    // Position stairs at the outer edge of Repos, descending outward
-    const stairsX = reposX;
-    const stairsZ = reposZ - reposDepth / 2; // Outer edge of Repos
+    // Position stairs at the right edge of Repos, descending to the right
+    const stairsX = reposX + reposLength / 2; // Right edge of Repos
+    const stairsZ = reposZ;
     
     return (
-      <group position={[stairsX, 0, stairsZ]}>
+      <group position={[stairsX, 0, stairsZ]} rotation={[0, Math.PI / 2, 0]}>
         {/* Vertical support beams on both sides */}
-        <mesh position={[-stairWidth / 2, height / 2, -stepDepth / 2]}>
+        <mesh position={[-stairWidth / 2, height / 2, stepDepth / 2]}>
           <boxGeometry args={[0.1, height, 0.1]} />
           <meshStandardMaterial color="#555555" />
         </mesh>
-        <mesh position={[stairWidth / 2, height / 2, -stepDepth / 2]}>
+        <mesh position={[stairWidth / 2, height / 2, stepDepth / 2]}>
           <boxGeometry args={[0.1, height, 0.1]} />
           <meshStandardMaterial color="#555555" />
         </mesh>
-        {/* Steps - positioned progressively outward to create proper stair structure */}
+        {/* Steps - positioned progressively inward to create proper stair structure */}
         {Array.from({ length: numSteps }).map((_, stepIdx) => {
           const stepY = stepIdx * stepHeight + stepHeight / 2;
-          // Position steps progressively outward: top step flush with Repos edge, bottom step extends furthest
-          const stepZ = -((numSteps - 1 - stepIdx) * stepDepth + stepDepth / 2);
+          // Position steps progressively inward: bottom step furthest out, top step flush with Repos edge
+          const stepZ = +((numSteps - 1 - stepIdx) * stepDepth + stepDepth / 2);
           return (
             <mesh key={stepIdx} position={[0, stepY, stepZ]}>
               <boxGeometry args={[stairWidth, 0.05, stepDepth]} />
@@ -671,19 +671,19 @@ function Stairs({
         return (
           <group key={qIdx} position={[offsetX, 0, 0]}>
             {/* Vertical support beams on both sides */}
-            <mesh position={[-stairWidth / 2, height / 2, -stepDepth / 2]}>
+            <mesh position={[-stairWidth / 2, height / 2, stepDepth / 2]}>
               <boxGeometry args={[0.1, height, 0.1]} />
               <meshStandardMaterial color="#555555" />
             </mesh>
-            <mesh position={[stairWidth / 2, height / 2, -stepDepth / 2]}>
+            <mesh position={[stairWidth / 2, height / 2, stepDepth / 2]}>
               <boxGeometry args={[0.1, height, 0.1]} />
               <meshStandardMaterial color="#555555" />
             </mesh>
-            {/* Steps - positioned progressively outward to create proper stair structure */}
+            {/* Steps - positioned progressively inward to create proper stair structure */}
             {Array.from({ length: numSteps }).map((_, stepIdx) => {
               const stepY = stepIdx * stepHeight + stepHeight / 2;
-              // Position steps progressively outward: top step flush with mezzanine edge, bottom step extends furthest
-              const stepZ = -((numSteps - 1 - stepIdx) * stepDepth + stepDepth / 2);
+              // Position steps progressively inward: bottom step furthest out, top step flush with mezzanine edge
+              const stepZ = +((numSteps - 1 - stepIdx) * stepDepth + stepDepth / 2);
               return (
                 <mesh
                   key={stepIdx}
