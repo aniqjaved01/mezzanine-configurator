@@ -154,6 +154,13 @@ export default function ConfigurationPanel({ config, onConfigChange }: Configura
   };
 
   const addAccessory = (type: 'stairs' | 'railings' | 'palletGate') => {
+    // Check if this accessory type already exists
+    const existingAccessory = config.accessories.find(a => a.type === type);
+    if (existingAccessory) {
+      alert(`${type === 'palletGate' ? 'Pallet Gate' : type.charAt(0).toUpperCase() + type.slice(1)} already added. Use +/- buttons to adjust quantity.`);
+      return;
+    }
+    
     // Check if adding railings would exceed available perimeter
     if (type === 'railings') {
       const availablePerimeter = calculateAvailablePerimeter(config);
