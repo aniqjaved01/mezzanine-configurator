@@ -42,9 +42,9 @@ function MezzanineModel({ config }: { config: MezzanineConfig }) {
     [config.accessories]
   );
 
-  // Check if there's a Vinkel stair (corner stair with Repos)
-  const vinkelStair = useMemo(
-    () => stairs.find((s) => s.stairType?.includes('Vinkel')),
+  // Check if there's a Corner stair (corner stair with Repos)
+  const cornerStair = useMemo(
+    () => stairs.find((s) => s.stairType?.includes('Corner stairs')),
     [stairs]
   );
 
@@ -65,8 +65,8 @@ function MezzanineModel({ config }: { config: MezzanineConfig }) {
         <meshStandardMaterial color="#fffacd" />
       </mesh>
 
-      {/* Repos Platform - only if Vinkel stair exists */}
-      {vinkelStair && (
+      {/* Repos Platform - only if Corner stair exists */}
+      {cornerStair && (
         <ReposPlatform length={length} width={width} height={height} />
       )}
 
@@ -95,7 +95,7 @@ function MezzanineModel({ config }: { config: MezzanineConfig }) {
             index={idx}
             stairsQuantity={totalStairsQuantity}
             palletGatesWidths={palletGatesWidths}
-            hasRepos={!!vinkelStair}
+            hasRepos={!!cornerStair}
           />
         );
       })}
@@ -212,7 +212,7 @@ function SupportColumns({
   );
 }
 
-// Repos Platform component - extended platform at front-left corner for Vinkel stairs
+// Repos Platform component - extended platform at front-left corner for Corner stairs
 function ReposPlatform({
   length,
   width,
@@ -487,16 +487,16 @@ function Railings({
     const distanceAlongEdge = currentDistance - edge.edgeStartDist;
     const remainingOnEdge = edge.edgeLength - distanceAlongEdge;
     
-    // Skip gaps on repos-right edge (where Vinkel stairs are)
+    // Skip gaps on repos-right edge (where Corner stairs are)
     if (edge.edge === 'repos-right' && hasRepos) {
-      // Skip the entire Vinkel stair area (where stairs descend from Repos)
+      // Skip the entire Corner stair area (where stairs descend from Repos)
       currentDistance += remainingOnEdge;
       if (currentDistance >= perimeter) break; // Stop if we've completed the perimeter
       continue;
     }
     
     // Check for gaps on front edge (regular stairs/pallet gates)
-    // Only apply this if there are actual regular stairs (non-Vinkel) on the front edge
+    // Only apply this if there are actual regular stairs (non-Corner stairs) on the front edge
     if (edge.edge === 'front') {
       const currentXPos = edge.start[0] + (edge.end[0] - edge.start[0]) * (distanceAlongEdge / edge.edgeLength);
       
@@ -504,7 +504,7 @@ function Railings({
       let inGap = false;
       let skipToX = currentXPos;
       
-      // Only check for gaps from pallet gates, not stairs (when Vinkel is present)
+      // Only check for gaps from pallet gates, not stairs (when Corner stairs is present)
       const gapsToCheck = hasRepos ? [...palletGatesXRanges] : [...stairsXRanges, ...palletGatesXRanges];
       
       for (const [minX, maxX] of gapsToCheck) {
@@ -534,7 +534,7 @@ function Railings({
       const startXPos = edge.start[0] + (edge.end[0] - edge.start[0]) * (distanceAlongEdge / edge.edgeLength);
       const endXPos = edge.start[0] + (edge.end[0] - edge.start[0]) * ((distanceAlongEdge + segmentLen) / edge.edgeLength);
       
-      // Only check for gaps from pallet gates, not stairs (when Vinkel is present)
+      // Only check for gaps from pallet gates, not stairs (when Corner stairs is present)
       const gapsToCheck = hasRepos ? [...palletGatesXRanges] : [...stairsXRanges, ...palletGatesXRanges];
       
       for (const [minX, _maxX] of gapsToCheck) {
@@ -633,9 +633,9 @@ function Stairs({
   quantity: number;
   stairType?: string;
 }) {
-  const isVinkel = stairType?.includes('Vinkel') || false;
+  const isCornerStair = stairType?.includes('Corner stairs') || false;
   
-  // Extract width from stairType (e.g., "Straight 1m" -> 1.0, "Vinkel 1.2m" -> 1.2)
+  // Extract width from stairType (e.g., "Straight 1m" -> 1.0, "Corner stairs 1.2m" -> 1.2)
   const stairWidthMatch = stairType?.match(/([\d.]+)m/);
   const stairWidth = stairWidthMatch ? parseFloat(stairWidthMatch[1]) : 1.0;
   
@@ -643,8 +643,8 @@ function Stairs({
   const stepDepth = 0.3; // 0.3 meters depth per step
   const numSteps = Math.ceil(height / stepHeight);
 
-  // For Vinkel stairs, position on the Repos platform
-  if (isVinkel) {
+  // For Corner stairs, position on the Repos platform
+  if (isCornerStair) {
     const reposLength = 3.0;
     const reposDepth = 1.4;
     const reposX = -length / 2 + reposLength / 2;

@@ -14,7 +14,7 @@ const LOAD_MULTIPLIERS: Record<number, number> = {
 
 // Accessory base prices
 const STAIRS_BASE_PRICE = 15000;
-const VINKEL_STAIRS_BASE_PRICE = 25000; // Vinkel stairs cost more (includes Repos platform)
+const CORNER_STAIRS_BASE_PRICE = 25000; // Corner stairs cost more (includes Repos platform)
 const RAILING_PRICE_PER_METER = 800;
 const PALLET_GATE_BASE_PRICE = 12000;
 
@@ -28,14 +28,14 @@ const LEASING_3_YEARS_FACTOR = 0.029; // 2.9% annual interest
 const LEASING_5_YEARS_FACTOR = 0.035; // 3.5% annual interest
 
 /**
- * Calculate square meters from dimensions (including Repos if Vinkel stairs present)
+ * Calculate square meters from dimensions (including Repos if Corner stairs present)
  */
 export function calculateSquareMeters(length: number, width: number, accessories: Accessory[] = []): number {
   let baseArea = (length * width) / 1000000; // Convert mm² to m²
   
-  // Check if there's a Vinkel stair - if so, add Repos area
-  const hasVinkelStair = accessories.some(a => a.type === 'stairs' && a.stairType?.includes('Vinkel'));
-  if (hasVinkelStair) {
+  // Check if there's a Corner stair - if so, add Repos area
+  const hasCornerStair = accessories.some(a => a.type === 'stairs' && a.stairType?.includes('Corner stairs'));
+  if (hasCornerStair) {
     baseArea += REPOS_AREA;
   }
   
@@ -66,9 +66,9 @@ function calculateAccessoriesPrice(accessories: Accessory[]): number {
   for (const accessory of accessories) {
     switch (accessory.type) {
       case 'stairs': {
-        // Check if it's a Vinkel stair
-        const isVinkel = accessory.stairType?.includes('Vinkel');
-        const stairPrice = isVinkel ? VINKEL_STAIRS_BASE_PRICE : STAIRS_BASE_PRICE;
+        // Check if it's a Corner stair
+        const isCornerStair = accessory.stairType?.includes('Corner stairs');
+        const stairPrice = isCornerStair ? CORNER_STAIRS_BASE_PRICE : STAIRS_BASE_PRICE;
         total += stairPrice * accessory.quantity;
         break;
       }

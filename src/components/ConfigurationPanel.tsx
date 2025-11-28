@@ -8,13 +8,13 @@ interface ConfigurationPanelProps {
 // Repos platform dimensions (fixed) - matches MezzanineViewer.tsx
 const REPOS_DEPTH = 1.4; // meters
 
-// Helper function to calculate perimeter in meters (including Repos if Vinkel stairs present)
+// Helper function to calculate perimeter in meters (including Repos if Corner stairs present)
 const calculatePerimeter = (length: number, width: number, accessories: Accessory[]): number => {
   let perimeter = 2 * ((length / 1000) + (width / 1000));
   
-  // Check if Vinkel stair exists (adds Repos platform)
-  const hasVinkelStair = accessories.some(a => a.type === 'stairs' && a.stairType?.includes('Vinkel'));
-  if (hasVinkelStair) {
+  // Check if Corner stair exists (adds Repos platform)
+  const hasCornerStair = accessories.some(a => a.type === 'stairs' && a.stairType?.includes('Corner stairs'));
+  if (hasCornerStair) {
     // Repos platform extends from front-left corner:
     // - Replaces REPOS_LENGTH (3m) of the main front edge
     // - Adds 3 new edges: left (1.4m) + front (3m) + right (1.4m) = 5.8m
@@ -35,8 +35,8 @@ const calculateStairsSpace = (accessories: Accessory[]): number => {
       // Regular stairs: 1m per stair on the front edge
       space += stair.quantity * 1.0;
       
-      // Vinkel stairs also occupy the repos-right edge (1.4m)
-      if (stair.stairType?.includes('Vinkel')) {
+      // Corner stairs also occupy the repos-right edge (1.4m)
+      if (stair.stairType?.includes('Corner stairs')) {
         space += REPOS_DEPTH; // Add 1.4m for the repos-right edge
       }
     });
@@ -67,15 +67,15 @@ const calculateAvailablePerimeter = (config: MezzanineConfig): number => {
   const stairsSpace = calculateStairsSpace(config.accessories);
   const palletGatesSpace = calculatePalletGatesSpace(config.accessories);
   
-  // Check if there's a Vinkel stair (which adds Repos platform)
-  const hasVinkelStair = config.accessories.some(a => a.type === 'stairs' && a.stairType?.includes('Vinkel'));
-  
-  if (hasVinkelStair) {
-    // For Vinkel: available = total perimeter rounded down
+  // Check if there's a Corner stair (which adds Repos platform)
+  const hasCornerStair = config.accessories.some(a => a.type === 'stairs' && a.stairType?.includes('Corner stairs'));
+
+  if (hasCornerStair) {
+    // For Corner stairs: available = total perimeter rounded down
     return Math.max(0, Math.floor(perimeter));
   }
   
-  // For non-Vinkel configurations: calculate normally and round up
+  // For non-Corner stairs configurations: calculate normally and round up
   const available = perimeter - stairsSpace - palletGatesSpace;
   return Math.max(0, Math.ceil(available));
 };
@@ -207,15 +207,15 @@ export default function ConfigurationPanel({ config, onConfigChange }: Configura
     const accessory = config.accessories.find(a => a.id === id);
     if (!accessory) return;
     
-    // If updating stairs to/from Vinkel type, validate
+    // If updating stairs to/from Corner stairs type, validate
     if (accessory.type === 'stairs' && updates.stairType) {
-      const isVinkel = updates.stairType.includes('Vinkel');
-      const currentVinkelStairs = config.accessories.filter(
-        a => a.type === 'stairs' && a.stairType?.includes('Vinkel') && a.id !== id
+      const isCornerStair = updates.stairType.includes('Corner stairs');
+      const currentCornerStairs = config.accessories.filter(
+        a => a.type === 'stairs' && a.stairType?.includes('Corner stairs') && a.id !== id
       );
       
-      if (isVinkel && currentVinkelStairs.length > 0) {
-        alert('Only one Vinkel (corner) stair is allowed at a time. Please remove the existing Vinkel stair first.');
+      if (isCornerStair && currentCornerStairs.length > 0) {
+        alert('Only one Corner stair is allowed at a time. Please remove the existing Corner stair first.');
         return;
       }
     }
@@ -432,10 +432,10 @@ export default function ConfigurationPanel({ config, onConfigChange }: Configura
                     <option value="Straight 1m">Straight 1m</option>
                     <option value="Straight 1.5m">Straight 1.5m</option>
                     <option value="Straight 2m">Straight 2m</option>
-                    <option value="Vinkel 1m">Vinkel 1m</option>
-                    <option value="Vinkel 1.2m">Vinkel 1.2m</option>
+                    <option value="Corner stairs 1m">Corner stairs 1m</option>
+                    <option value="Corner stairs 1.2m">Corner stairs 1.2m</option>
                   </select>
-                  {accessory.stairType?.includes('Vinkel') && (
+                  {accessory.stairType?.includes('Corner stairs') && (
                     <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
                       Corner stair with Repos platform (3m × 1.4m)
                     </div>
@@ -448,7 +448,7 @@ export default function ConfigurationPanel({ config, onConfigChange }: Configura
                         })
                       }
                       className="px-2 py-1 bg-gray-200 rounded"
-                      disabled={accessory.stairType?.includes('Vinkel')}
+                      disabled={accessory.stairType?.includes('Corner stairs')}
                     >
                       −
                     </button>
@@ -458,14 +458,14 @@ export default function ConfigurationPanel({ config, onConfigChange }: Configura
                         updateAccessory(accessory.id, { quantity: accessory.quantity + 1 })
                       }
                       className="px-2 py-1 bg-gray-200 rounded"
-                      disabled={accessory.stairType?.includes('Vinkel')}
+                      disabled={accessory.stairType?.includes('Corner stairs')}
                     >
                       +
                     </button>
                   </div>
-                  {accessory.stairType?.includes('Vinkel') && (
+                  {accessory.stairType?.includes('Corner stairs') && (
                     <div className="text-xs text-gray-500">
-                      Quantity fixed to 1 for Vinkel stairs
+                      Quantity fixed to 1 for Corner stairs
                     </div>
                   )}
                 </div>
