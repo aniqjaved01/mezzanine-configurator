@@ -671,11 +671,11 @@ function Stairs({
         return (
           <group key={qIdx} position={[offsetX, 0, 0]}>
             {/* Vertical support beams on both sides */}
-            <mesh position={[-stairWidth / 2, height / 2, stepDepth / 2]}>
+            <mesh position={[-stairWidth / 2, height / 2, -stepDepth / 2]}>
               <boxGeometry args={[0.1, height, 0.1]} />
               <meshStandardMaterial color="#555555" />
             </mesh>
-            <mesh position={[stairWidth / 2, height / 2, stepDepth / 2]}>
+            <mesh position={[stairWidth / 2, height / 2, -stepDepth / 2]}>
               <boxGeometry args={[0.1, height, 0.1]} />
               <meshStandardMaterial color="#555555" />
             </mesh>
@@ -683,7 +683,7 @@ function Stairs({
             {Array.from({ length: numSteps }).map((_, stepIdx) => {
               const stepY = stepIdx * stepHeight + stepHeight / 2;
               // Position steps progressively inward: bottom step furthest out, top step flush with mezzanine edge
-              const stepZ = +((numSteps - 1 - stepIdx) * stepDepth + stepDepth / 2);
+              const stepZ = -((numSteps - 1 - stepIdx) * stepDepth + stepDepth / 2);
               return (
                 <mesh
                   key={stepIdx}
