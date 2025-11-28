@@ -6,7 +6,6 @@ interface ConfigurationPanelProps {
 }
 
 // Repos platform dimensions (fixed) - matches MezzanineViewer.tsx
-const REPOS_LENGTH = 3.0; // meters
 const REPOS_DEPTH = 1.4; // meters
 
 // Helper function to calculate perimeter in meters (including Repos if Vinkel stairs present)
@@ -16,9 +15,11 @@ const calculatePerimeter = (length: number, width: number, accessories: Accessor
   // Check if Vinkel stair exists (adds Repos platform)
   const hasVinkelStair = accessories.some(a => a.type === 'stairs' && a.stairType?.includes('Vinkel'));
   if (hasVinkelStair) {
-    // Add Repos perimeter contribution: left edge + front edge + right edge
-    // (reposDepth + reposLength + reposDepth)
-    perimeter += 2 * REPOS_DEPTH + REPOS_LENGTH; // Add 5.8m
+    // Repos platform extends from front-left corner:
+    // - Replaces REPOS_LENGTH (3m) of the main front edge
+    // - Adds 3 new edges: left (1.4m) + front (3m) + right (1.4m) = 5.8m
+    // Net contribution: 5.8m - 3m = 2.8m
+    perimeter += 2 * REPOS_DEPTH; // Add 2.8m (net contribution)
   }
   
   return perimeter;
@@ -65,7 +66,18 @@ const calculateAvailablePerimeter = (config: MezzanineConfig): number => {
   const perimeter = calculatePerimeter(config.length, config.width, config.accessories);
   const stairsSpace = calculateStairsSpace(config.accessories);
   const palletGatesSpace = calculatePalletGatesSpace(config.accessories);
-  return Math.max(0, perimeter - stairsSpace - palletGatesSpace);
+  
+  // Check if there's a Vinkel stair (which adds Repos platform)
+  const hasVinkelStair = config.accessories.some(a => a.type === 'stairs' && a.stairType?.includes('Vinkel'));
+  
+  if (hasVinkelStair) {
+    // For Vinkel: available = total perimeter rounded down
+    return Math.max(0, Math.floor(perimeter));
+  }
+  
+  // For non-Vinkel configurations: calculate normally and round up
+  const available = perimeter - stairsSpace - palletGatesSpace;
+  return Math.max(0, Math.ceil(available));
 };
 
 // Helper function to automatically adjust railings to fit within available perimeter
