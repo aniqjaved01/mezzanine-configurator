@@ -535,6 +535,7 @@ export default function ConfigurationPanel({ config, onConfigChange }: Configura
                         })
                       }
                       className="px-2 py-1 bg-gray-200 rounded"
+                      disabled={true}
                     >
                       −
                     </button>
@@ -544,9 +545,13 @@ export default function ConfigurationPanel({ config, onConfigChange }: Configura
                         updateAccessory(accessory.id, { quantity: accessory.quantity + 1 })
                       }
                       className="px-2 py-1 bg-gray-200 rounded"
+                      disabled={true}
                     >
                       +
                     </button>
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    Quantity fixed to 1 for Pallet Gate
                   </div>
                 </div>
               )}
