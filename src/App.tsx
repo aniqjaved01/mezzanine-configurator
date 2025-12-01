@@ -8,7 +8,7 @@ import SummaryPanel from './components/SummaryPanel';
 import QuoteRequestForm from './components/QuoteRequestForm';
 
 const DEFAULT_CONFIG: MezzanineConfig = {
-  length: 9000,
+  length: 13000,
   width: 3000,
   height: 3000,
   loadCapacity: 250,

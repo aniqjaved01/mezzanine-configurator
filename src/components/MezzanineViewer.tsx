@@ -737,11 +737,11 @@ function PalletGate({
   return (
     <>
       {positions.map((pos, qIdx) => {
-        // Position at the front edge, exactly like railings
+        // Position at the front edge, slightly offset outward to avoid overlap with railings
         const basePosition: [number, number, number] = [
           pos.x,
           height + railingHeight / 2,
-          -width / 2
+          -width / 2 - 0.08  // Offset 8cm outward from front edge to be in front of railings
         ];
         
         return (
