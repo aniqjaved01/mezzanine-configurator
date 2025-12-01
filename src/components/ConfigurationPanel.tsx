@@ -71,12 +71,14 @@ const calculateAvailablePerimeter = (config: MezzanineConfig): number => {
   const hasCornerStair = config.accessories.some(a => a.type === 'stairs' && a.stairType?.includes('Corner stairs'));
 
   if (hasCornerStair) {
-    // For Corner stairs: available = total perimeter rounded down
-    return Math.max(0, Math.floor(perimeter));
+    // For Corner stairs: available = total perimeter rounded down, minus pallet gates
+    return Math.max(0, Math.floor(perimeter) - palletGatesSpace);
   }
   
-  // For non-Corner stairs configurations: calculate normally and round up
-  const available = perimeter - stairsSpace - palletGatesSpace;
+  // For straight stairs: stairs and pallet gates can overlap on the same edge
+  // So we subtract the maximum of the two, not both
+  const overlappingSpace = Math.max(stairsSpace, palletGatesSpace);
+  const available = perimeter - overlappingSpace;
   return Math.max(0, Math.ceil(available));
 };
 
@@ -503,9 +505,19 @@ export default function ConfigurationPanel({ config, onConfigChange }: Configura
                     </button>
                     <span className="flex-1 text-center">{accessory.quantity}</span>
                     <button
-                      onClick={() =>
-                        updateAccessory(accessory.id, { quantity: accessory.quantity + 1 })
-                      }
+                      onClick={() => {
+                        const availablePerimeter = calculateAvailablePerimeter(config);
+                        const currentRailingLength = calculateTotalRailingLength(config.accessories);
+                        const railingLength = accessory.length || 10;
+                        
+                        // Check if adding one more railing would exceed available perimeter
+                        if (currentRailingLength + railingLength > availablePerimeter) {
+                          alert(`Cannot add more railings. Available perimeter: ${availablePerimeter.toFixed(2)}m, Current usage: ${currentRailingLength.toFixed(2)}m. Adding ${railingLength}m more would exceed the limit.`);
+                          return;
+                        }
+                        
+                        updateAccessory(accessory.id, { quantity: accessory.quantity + 1 });
+                      }}
                       className="px-2 py-1 bg-gray-200 rounded"
                     >
                       +
